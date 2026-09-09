@@ -35,7 +35,7 @@ struct MenuContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(store.groups) { group in
-                            GroupSection(group: group)
+                            GroupSection(group: group, store: store)
                         }
                     }
                     .padding(.vertical, 8)
@@ -118,6 +118,7 @@ struct MenuContent: View {
 
 struct GroupSection: View {
     let group: ProjectGroup
+    @ObservedObject var store: AppStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -138,7 +139,7 @@ struct GroupSection: View {
             .padding(.bottom, 2)
 
             ForEach(group.projects) { project in
-                ProjectRow(project: project)
+                ProjectRow(project: project, status: store.status[project.id])
             }
         }
     }
@@ -148,6 +149,7 @@ struct GroupSection: View {
 
 struct ProjectRow: View {
     let project: Project
+    let status: ProjectStatus?
 
     var body: some View {
         HStack(spacing: 11) {
@@ -161,9 +163,20 @@ struct ProjectRow: View {
                 )
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(project.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(project.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                    if let branch = status?.branch {
+                        Text(branch)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.07)))
+                    }
+                }
                 Text(project.displayPath)
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
@@ -171,8 +184,27 @@ struct ProjectRow: View {
                     .truncationMode(.middle)
             }
             Spacer(minLength: 0)
+
+            statusDot
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    /// Bolinha de status docker: verde (up), cinza (down), oculta se sem compose.
+    @ViewBuilder private var statusDot: some View {
+        if project.hasCompose {
+            if status?.loading == true {
+                ProgressView().controlSize(.mini)
+            } else if let up = status?.dockerUp {
+                Circle()
+                    .fill(up ? Color.green : Color.secondary.opacity(0.45))
+                    .frame(width: 8, height: 8)
+                    .shadow(color: up ? Color.green.opacity(0.6) : .clear, radius: 3)
+                    .help(up ? "Containers no ar" : "Containers parados")
+            } else {
+                Circle().fill(Color.secondary.opacity(0.25)).frame(width: 8, height: 8)
+            }
+        }
     }
 }

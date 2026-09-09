@@ -1,6 +1,6 @@
 # Status git + docker
 
-> Status: todo · Ordem: 03 · Depende de: 02
+> Status: done · Ordem: 03 · Depende de: 02
 
 ## Objetivo
 Mostrar, por projeto, a branch git atual e se os containers estão up/down.

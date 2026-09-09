@@ -39,7 +39,7 @@ verificação manual do critério de aceite (com evidência real, conforme o con
 ## Tasks
 - [x] [01 — Esqueleto do app](01-esqueleto-app.md) · build.sh, Info.plist, MenuBarExtra, ícone, README
 - [x] [02 — Scanner de projetos](02-scanner-projetos.md) · varre e agrupa
-- [ ] [03 — Status git + docker](03-status-git-docker.md) · branch + bolinha up/down
+- [x] [03 — Status git + docker](03-status-git-docker.md) · branch + bolinha up/down
 - [ ] [04 — Tamanho + linguagens](04-tamanho-linguagens.md) · du -sh + detecção de linguagens
 - [ ] [05 — Ações + painel de logs](05-acoes-painel-logs.md) · play/stop, logs, abrir editor/Finder
 - [ ] [06 — Busca + polimento visual](06-busca-polimento-visual.md) · filtro, liquid glass, header/footer
