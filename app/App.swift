@@ -374,11 +374,16 @@ struct ProjectRow: View {
             }
             Spacer(minLength: 0)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 favoriteButton
-                statusDot
                 if store.hasDevCommand(project) { devButton }
-                if project.hasCompose { composeButton }
+                if project.hasCompose {
+                    // Grupo docker: status + play/stop juntos.
+                    HStack(spacing: 6) {
+                        statusDot
+                        composeButton
+                    }
+                }
                 openMenu
             }
         }
