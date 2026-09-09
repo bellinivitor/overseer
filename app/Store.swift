@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Store
 //
@@ -33,6 +34,29 @@ final class AppStore: ObservableObject {
 
     /// Total de projetos detectados.
     var totalProjects: Int { groups.reduce(0) { $0 + $1.projects.count } }
+
+    /// Nº de grupos com ao menos um projeto com containers no ar.
+    var activeGroupsCount: Int {
+        groups.filter { g in g.projects.contains { status[$0.id]?.dockerUp == true } }.count
+    }
+
+    /// Abre um NSOpenPanel para escolher o root de scan e re-varre.
+    func chooseRoot() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Escolher"
+        panel.directoryURL = URL(fileURLWithPath: rootPath)
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        rootPath = url.path
+        groups = []
+        status = [:]
+        meta = [:]
+        logs = [:]
+        rescan()
+    }
 
     /// Re-executa o scan de forma assíncrona.
     func rescan() {

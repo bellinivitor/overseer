@@ -1,6 +1,6 @@
 # Busca + polimento visual
 
-> Status: todo · Ordem: 06 · Depende de: 04, 05
+> Status: done · Ordem: 06 · Depende de: 04, 05
 
 ## Objetivo
 Adicionar busca/filtro e deixar o painel com a estética liquid glass do mockup,

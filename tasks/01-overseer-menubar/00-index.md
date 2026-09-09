@@ -42,4 +42,4 @@ verificação manual do critério de aceite (com evidência real, conforme o con
 - [x] [03 — Status git + docker](03-status-git-docker.md) · branch + bolinha up/down
 - [x] [04 — Tamanho + linguagens](04-tamanho-linguagens.md) · du -sh + detecção de linguagens
 - [x] [05 — Ações + painel de logs](05-acoes-painel-logs.md) · play/stop, logs, abrir editor/Finder
-- [ ] [06 — Busca + polimento visual](06-busca-polimento-visual.md) · filtro, liquid glass, header/footer
+- [x] [06 — Busca + polimento visual](06-busca-polimento-visual.md) · filtro, liquid glass, header/footer

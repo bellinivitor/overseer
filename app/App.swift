@@ -25,6 +25,20 @@ struct OverseerApp: App {
 struct MenuContent: View {
     @ObservedObject var store: AppStore
     @State private var openLogFor: String?
+    @State private var searchText = ""
+
+    /// Grupos filtrados pela busca (nome, caminho ou grupo). Grupos sem match somem.
+    private var filteredGroups: [ProjectGroup] {
+        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return store.groups }
+        return store.groups.compactMap { g in
+            if g.label.lowercased().contains(q) { return g }
+            let hits = g.projects.filter {
+                $0.name.lowercased().contains(q) || $0.path.lowercased().contains(q)
+            }
+            return hits.isEmpty ? nil : ProjectGroup(id: g.id, label: g.label, projects: hits)
+        }
+    }
 
     var body: some View {
         Group {
@@ -35,21 +49,30 @@ struct MenuContent: View {
             }
         }
         .frame(width: 360)
+        .liquidGlass()
         .onAppear { if store.groups.isEmpty { store.rescan() } }
     }
 
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if !store.groups.isEmpty { searchField }
             Divider()
             if store.groups.isEmpty {
                 emptyState
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(store.groups) { group in
+                        ForEach(filteredGroups) { group in
                             GroupSection(group: group, store: store,
                                          onOpenLog: { openLogFor = $0 })
+                        }
+                        if filteredGroups.isEmpty {
+                            Text("Nenhum projeto para “\(searchText)”.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 24)
                         }
                     }
                     .padding(.vertical, 8)
@@ -59,6 +82,29 @@ struct MenuContent: View {
             Divider()
             footer
         }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            TextField("Buscar projeto…", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12.5))
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.06)))
+        .padding(.horizontal, 14)
+        .padding(.bottom, 8)
     }
 
     private var header: some View {
@@ -107,22 +153,31 @@ struct MenuContent: View {
     }
 
     private var footer: some View {
-        HStack {
-            Text(store.isScanning ? "Atualizando…" : "\(store.groups.count) grupos")
+        HStack(spacing: 10) {
+            Text(footerHint)
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
+                .lineLimit(1)
             Spacer()
-            Button {
-                NSApplication.shared.terminate(nil)
-            } label: {
-                Text("Sair")
-                    .font(.system(size: 11.5))
+            Button { store.chooseRoot() } label: {
+                Text("Configurar diretório").font(.system(size: 11.5))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            Button { NSApplication.shared.terminate(nil) } label: {
+                Text("Sair").font(.system(size: 11.5))
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    private var footerHint: String {
+        if store.isScanning { return "Atualizando…" }
+        let active = store.activeGroupsCount
+        return active > 0 ? "\(active) grupo(s) com containers ativos" : "\(store.groups.count) grupos"
     }
 }
 
@@ -164,6 +219,8 @@ struct ProjectRow: View {
     let project: Project
     @ObservedObject var store: AppStore
     let onOpenLog: (String) -> Void
+
+    @State private var hovering = false
 
     private var status: ProjectStatus? { store.status[project.id] }
     private var meta: ProjectMeta? { store.meta[project.id] }
@@ -211,8 +268,14 @@ struct ProjectRow: View {
                 openMenu
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 10)
         .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(hovering ? 0.07 : 0))
+        )
+        .padding(.horizontal, 6)
+        .onHover { hovering = $0 }
     }
 
     /// Botão play/stop: sobe se estiver down, derruba se estiver up.
@@ -359,5 +422,20 @@ struct LogView: View {
     private func exitLabel(_ code: Int32?) -> String {
         guard let code else { return "concluído" }
         return code == 0 ? "concluído com sucesso" : "terminou com erro (código \(code))"
+    }
+}
+
+// MARK: - Liquid glass (Tahoe) com fallback material
+
+extension View {
+    /// Aplica o efeito liquid glass no macOS Tahoe (26+); cai para
+    /// .ultraThinMaterial em versões anteriores.
+    @ViewBuilder func liquidGlass() -> some View {
+        if #available(macOS 26.0, *) {
+            self.background(.ultraThinMaterial)
+                .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+        } else {
+            self.background(.ultraThinMaterial)
+        }
     }
 }

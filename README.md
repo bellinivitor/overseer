@@ -38,8 +38,8 @@ O `build.sh` embute o `AppIcon.icns` se ele existir.
 Em desenvolvimento pelo fluxo em `tasks/`. Roadmap do v1:
 
 1. ✅ Esqueleto (menu bar + build)
-2. ⬜ Scanner de projetos (varre e agrupa)
-3. ⬜ Status git + docker
-4. ⬜ Tamanho em disco + linguagens
-5. ⬜ Ações + painel de logs
-6. ⬜ Busca + polimento visual (liquid glass)
+2. ✅ Scanner de projetos (varre e agrupa)
+3. ✅ Status git + docker
+4. ✅ Tamanho em disco + linguagens
+5. ✅ Ações + painel de logs
+6. ✅ Busca + polimento visual (liquid glass)
