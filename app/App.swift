@@ -623,6 +623,10 @@ struct LogView: View {
                     .padding(10)
                 }
                 .frame(height: 380)
+                .onAppear {
+                    // Ao abrir/reabrir, vai direto pro fim (sem animação).
+                    DispatchQueue.main.async { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
                 .onChange(of: session?.lines.count) { _ in
                     withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
