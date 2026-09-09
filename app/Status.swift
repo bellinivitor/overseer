@@ -8,16 +8,57 @@ import Foundation
 struct ProjectStatus: Equatable {
     var branch: String?      // nil = sem git / não lido
     var dockerUp: Bool?      // nil = sem docker/compose ou desconhecido
+    var dirty: Bool = false  // tem alterações não commitadas
+    var ahead: Int = 0       // commits à frente do upstream
+    var behind: Int = 0      // commits atrás do upstream
+    var ports: [Int] = []    // portas publicadas dos containers no ar
     var loading: Bool = false
 }
 
+/// Resultado consolidado de `git status`.
+struct GitInfo {
+    var branch: String?
+    var dirty: Bool
+    var ahead: Int
+    var behind: Int
+}
+
+/// Resultado consolidado de `docker compose ps`.
+struct DockerInfo {
+    var up: Bool?
+    var ports: [Int]
+}
+
 enum StatusProbe {
-    /// Branch atual (ex.: "main"), ou nil se não for repo git.
-    static func gitBranch(at path: String) -> String? {
-        guard let r = Shell.run("git", ["rev-parse", "--abbrev-ref", "HEAD"], cwd: path, timeout: 8),
-              r.status == 0 else { return nil }
-        let b = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        return b.isEmpty ? nil : b
+    /// Branch + estado (dirty/ahead/behind) numa única chamada
+    /// (`git status --porcelain=v1 --branch`).
+    static func gitInfo(at path: String) -> GitInfo {
+        guard let r = Shell.run("git", ["status", "--porcelain=v1", "--branch"], cwd: path, timeout: 8),
+              r.status == 0 else {
+            return GitInfo(branch: nil, dirty: false, ahead: 0, behind: 0)
+        }
+        let lines = r.stdout.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var branch: String?, ahead = 0, behind = 0, dirty = false
+
+        if let first = lines.first, first.hasPrefix("##") {
+            let body = first.dropFirst(2).trimmingCharacters(in: .whitespaces)
+            // "main...origin/main [ahead 1, behind 2]" — nome vai até "..." ou espaço
+            let namePart = body.split(separator: " ").first.map(String.init) ?? String(body)
+            branch = namePart.components(separatedBy: "...").first
+            ahead = intAfter("ahead ", in: body)
+            behind = intAfter("behind ", in: body)
+            dirty = lines.dropFirst().contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        } else {
+            dirty = lines.contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        }
+        if branch?.isEmpty ?? true { branch = nil }
+        return GitInfo(branch: branch, dirty: dirty, ahead: ahead, behind: behind)
+    }
+
+    private static func intAfter(_ needle: String, in s: String) -> Int {
+        guard let r = s.range(of: needle) else { return 0 }
+        let digits = s[r.upperBound...].prefix { $0.isNumber }
+        return Int(digits) ?? 0
     }
 
     /// URL https do remote `origin` (normalizada de SSH), ou nil se não houver.
@@ -27,15 +68,42 @@ enum StatusProbe {
         return GitRemote.normalize(r.stdout.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// true se há containers em execução para o compose do projeto; false se
-    /// nenhum; nil se docker não está disponível.
-    /// Usa `docker compose ps -q`: por padrão lista só serviços em execução.
-    static func dockerUp(at path: String) -> Bool? {
-        guard let r = Shell.run("docker", ["compose", "ps", "-q"], cwd: path, timeout: 25) else {
-            return nil  // docker não encontrado
+    /// Estado docker + portas publicadas via `docker compose ps --format json`.
+    /// up: true se algum serviço rodando; false se nenhum; nil se docker ausente.
+    static func dockerInfo(at path: String) -> DockerInfo {
+        guard let r = Shell.run("docker", ["compose", "ps", "--format", "json"], cwd: path, timeout: 25) else {
+            return DockerInfo(up: nil, ports: [])   // docker não encontrado
         }
-        if r.status != 0 { return false }  // compose presente mas nada up (ou erro) -> down
-        return !r.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if r.status != 0 { return DockerInfo(up: false, ports: []) }
+        let out = r.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        if out.isEmpty { return DockerInfo(up: false, ports: []) }
+
+        // Formato pode ser um array JSON ou um objeto por linha (compose novo).
+        var objs: [[String: Any]] = []
+        if let data = out.data(using: .utf8),
+           let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            objs = arr
+        } else {
+            for line in out.split(separator: "\n") {
+                if let d = line.data(using: .utf8),
+                   let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                    objs.append(o)
+                }
+            }
+        }
+
+        var up = false
+        var ports = Set<Int>()
+        for o in objs {
+            let state = (o["State"] as? String ?? "").lowercased()
+            if state.contains("running") || state.contains("up") { up = true }
+            if let pubs = o["Publishers"] as? [[String: Any]] {
+                for p in pubs {
+                    if let pp = p["PublishedPort"] as? Int, pp > 0 { ports.insert(pp) }
+                }
+            }
+        }
+        return DockerInfo(up: up, ports: ports.sorted())
     }
 }
 

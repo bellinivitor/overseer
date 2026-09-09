@@ -25,6 +25,14 @@ final class AppStore: ObservableObject {
     private let terminalKey = "terminalApp"
     private let maxConcurrentProbes = 6
 
+    init() {
+        // Scan inicial no launch para o badge da barra refletir o estado sem
+        // precisar abrir o painel. Depois disso o app fica ocioso (sem timers)
+        // até uma interação/refresh.
+        rescan()
+        checkForUpdate()
+    }
+
     // MARK: Aplicativos padrão (IDE / Terminal)
 
     /// App usado em "Abrir no editor" (nome ou caminho de .app). Default: VS Code.
@@ -246,11 +254,13 @@ final class AppStore: ObservableObject {
                 func addNext() {
                     guard let p = it.next() else { return }
                     group.addTask {
-                        let branch = p.hasGit ? StatusProbe.gitBranch(at: p.path) : nil
-                        let up = p.hasCompose ? StatusProbe.dockerUp(at: p.path) : nil
+                        let git = p.hasGit ? StatusProbe.gitInfo(at: p.path) : GitInfo(branch: nil, dirty: false, ahead: 0, behind: 0)
+                        let dk = p.hasCompose ? StatusProbe.dockerInfo(at: p.path) : DockerInfo(up: nil, ports: [])
                         let remote = p.hasGit ? StatusProbe.gitRemoteURL(at: p.path) : nil
                         await MainActor.run {
-                            self.status[p.id] = ProjectStatus(branch: branch, dockerUp: up, loading: false)
+                            self.status[p.id] = ProjectStatus(branch: git.branch, dockerUp: dk.up,
+                                                              dirty: git.dirty, ahead: git.ahead, behind: git.behind,
+                                                              ports: dk.ports, loading: false)
                             self.remotes[p.id] = remote
                         }
                     }
@@ -334,12 +344,50 @@ final class AppStore: ObservableObject {
                                            dockerUp: status[project.id]?.dockerUp,
                                            loading: true)
         Task.detached(priority: .userInitiated) {
-            let branch = project.hasGit ? StatusProbe.gitBranch(at: project.path) : nil
-            let up = project.hasCompose ? StatusProbe.dockerUp(at: project.path) : nil
+            let git = project.hasGit ? StatusProbe.gitInfo(at: project.path) : GitInfo(branch: nil, dirty: false, ahead: 0, behind: 0)
+            let dk = project.hasCompose ? StatusProbe.dockerInfo(at: project.path) : DockerInfo(up: nil, ports: [])
             let remote = project.hasGit ? StatusProbe.gitRemoteURL(at: project.path) : nil
             await MainActor.run {
-                self.status[project.id] = ProjectStatus(branch: branch, dockerUp: up, loading: false)
+                self.status[project.id] = ProjectStatus(branch: git.branch, dockerUp: dk.up,
+                                                        dirty: git.dirty, ahead: git.ahead, behind: git.behind,
+                                                        ports: dk.ports, loading: false)
                 self.remotes[project.id] = remote
+            }
+        }
+    }
+
+    // MARK: Auto-refresh (só docker, para o timer com o painel aberto)
+
+    /// Nº de projetos com containers no ar.
+    var runningCount: Int {
+        status.values.filter { $0.dockerUp == true }.count
+    }
+
+    /// Recalcula só o estado docker (up + portas) dos projetos com compose,
+    /// preservando os campos de git. Leve o bastante para rodar a cada poucos
+    /// segundos enquanto o painel está aberto.
+    func refreshDockerStates() {
+        let targets = groups.flatMap { $0.projects }.filter { $0.hasCompose }
+        guard !targets.isEmpty else { return }
+        let limit = maxConcurrentProbes
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                var it = targets.makeIterator()
+                func addNext() {
+                    guard let p = it.next() else { return }
+                    group.addTask {
+                        let dk = StatusProbe.dockerInfo(at: p.path)
+                        await MainActor.run {
+                            var s = self.status[p.id] ?? ProjectStatus()
+                            s.dockerUp = dk.up
+                            s.ports = dk.ports
+                            s.loading = false
+                            self.status[p.id] = s
+                        }
+                    }
+                }
+                for _ in 0..<limit { addNext() }
+                for await _ in group { addNext() }
             }
         }
     }

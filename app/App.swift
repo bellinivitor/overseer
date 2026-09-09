@@ -15,6 +15,9 @@ struct OverseerApp: App {
             MenuContent(store: store)
         } label: {
             Image(systemName: "square.stack.3d.up")
+            if store.runningCount > 0 {
+                Text("\(store.runningCount)")
+            }
         }
         .menuBarExtraStyle(.window)
 
@@ -32,6 +35,7 @@ struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
     @State private var openLogFor: String?
     @State private var searchText = ""
+    @State private var autoRefresh: Timer?
 
     private var query: String { searchText.trimmingCharacters(in: .whitespaces).lowercased() }
 
@@ -69,8 +73,22 @@ struct MenuContent: View {
         .liquidGlass()
         .onAppear {
             if store.groups.isEmpty { store.rescan() }
-            store.checkForUpdate()
+            startAutoRefresh()
         }
+        .onDisappear { stopAutoRefresh() }
+    }
+
+    /// Refresh leve do status docker a cada 5s enquanto o painel está aberto
+    /// (parado ao fechar — não afeta o consumo ocioso).
+    private func startAutoRefresh() {
+        autoRefresh?.invalidate()
+        autoRefresh = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+            store.refreshDockerStates()
+        }
+    }
+    private func stopAutoRefresh() {
+        autoRefresh?.invalidate()
+        autoRefresh = nil
     }
 
     private var list: some View {
@@ -329,6 +347,16 @@ struct ProjectRow: View {
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.07)))
                     }
+                    if status?.dirty == true {
+                        Circle().fill(Color.orange).frame(width: 6, height: 6)
+                            .help("Alterações não commitadas")
+                    }
+                    if let s = status, s.ahead > 0 || s.behind > 0 {
+                        Text((s.ahead > 0 ? "↑\(s.ahead)" : "") + (s.behind > 0 ? "↓\(s.behind)" : ""))
+                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .help("\(s.ahead) à frente, \(s.behind) atrás do upstream")
+                    }
                 }
                 Text(project.displayPath)
                     .font(.system(size: 11))
@@ -421,7 +449,14 @@ struct ProjectRow: View {
             Button("Abrir no Finder") { Actions.revealInFinder(project.path) }
             Button("Abrir no \(store.terminalDisplayName)") { Actions.open(inApp: store.terminalApp, path: project.path) }
             Button("Abrir Claude Code") { Actions.openClaudeCode(path: project.path, terminalApp: store.terminalApp) }
+            if let ports = status?.ports, !ports.isEmpty {
+                Divider()
+                ForEach(ports, id: \.self) { port in
+                    Button("Abrir localhost:\(port)") { Actions.openURL("http://localhost:\(port)") }
+                }
+            }
             if let remote = store.remotes[project.id] {
+                Divider()
                 Button("Abrir repositório") { Actions.openURL(remote) }
             }
             if store.logs[project.id] != nil {
