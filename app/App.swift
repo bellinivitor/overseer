@@ -449,21 +449,24 @@ struct ProjectRow: View {
         .help(status?.dockerUp == true ? "Derrubar containers" : "Subir containers")
     }
 
-    /// Botão do task runner (comando de dev): inicia/para e abre o log.
+    /// Botão do task runner (comando de dev).
+    /// - Parado: inicia o comando e abre o log.
+    /// - Rodando: apenas abre o log (NÃO para — parar é no painel), mantendo o
+    ///   servidor vivo em background.
     @ViewBuilder private var devButton: some View {
         let running = store.isDevRunning(project)
         Button {
-            store.toggleDev(project)
+            if !running { store.runDev(project) }
             onOpenLog(LogTarget(id: project.id, dev: true))
         } label: {
-            Image(systemName: running ? "stop.circle.fill" : "bolt.fill")
+            Image(systemName: running ? "bolt.fill" : "bolt")
                 .font(.system(size: 11))
-                .foregroundStyle(running ? Color.orange : Color.secondary)
+                .foregroundStyle(running ? Color.green : Color.secondary)
                 .frame(width: 22, height: 22)
                 .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.07)))
         }
         .buttonStyle(.plain)
-        .help(running ? "Parar dev" : "Rodar dev (\(store.devCommand(for: project)))")
+        .help(running ? "Ver log do dev (rodando)" : "Rodar dev (\(store.devCommand(for: project)))")
     }
 
     /// Menu de abrir o projeto.
