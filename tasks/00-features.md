@@ -1,0 +1,7 @@
+# Features — Overseer
+
+Lista de features do projeto. Cada feature vive em `tasks/NN-slug/`.
+
+| NN | Feature | Status | Link |
+|----|---------|--------|------|
+| 01 | overseer-menubar — app de menu bar com scan de projetos, status docker/git, tamanho, linguagens, ações e busca | doing | [01-overseer-menubar](01-overseer-menubar/00-index.md) |

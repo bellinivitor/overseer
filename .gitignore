@@ -1,0 +1,5 @@
+# Artefatos de build (o usuário gera com ./build.sh)
+build/
+
+# macOS
+.DS_Store
