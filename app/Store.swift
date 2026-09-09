@@ -15,7 +15,35 @@ final class AppStore: ObservableObject {
     @Published var logs: [String: LogSession] = [:]         // sessão de logs por projeto
 
     private let rootKey = "rootPath"
+    private let sortKey = "sortOrder"
     private let maxConcurrentProbes = 6
+
+    /// Critério de ordenação dos projetos (persistido). Muda a ordem na hora.
+    var sortOrder: SortOrder {
+        get { SortOrder(rawValue: UserDefaults.standard.string(forKey: sortKey) ?? "") ?? .alphabetical }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: sortKey)
+            objectWillChange.send()
+            applySort()
+        }
+    }
+
+    /// Reordena os projetos dentro de cada grupo conforme `sortOrder`.
+    func applySort() {
+        let order = sortOrder
+        groups = groups.map { group in
+            var g = group
+            g.projects.sort { a, b in
+                switch order {
+                case .alphabetical:
+                    return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+                case .modified:
+                    return (a.modified ?? .distantPast) > (b.modified ?? .distantPast)
+                }
+            }
+            return g
+        }
+    }
 
     /// Diretório raiz do scan (persistido em UserDefaults). Default: ~/www.
     var rootPath: String {
@@ -67,6 +95,7 @@ final class AppStore: ObservableObject {
             let result = Scanner.scan(root: root)
             await MainActor.run {
                 self.groups = result
+                self.applySort()
                 self.isScanning = false
                 self.refreshAllStatus()
                 self.refreshAllMeta(force: true)

@@ -17,6 +17,11 @@ struct OverseerApp: App {
             Image(systemName: "square.stack.3d.up")
         }
         .menuBarExtraStyle(.window)
+
+        Window("Configurações do Overseer", id: "config") {
+            ConfigWindow(store: store)
+        }
+        .windowResizability(.contentSize)
     }
 }
 
@@ -24,6 +29,7 @@ struct OverseerApp: App {
 
 struct MenuContent: View {
     @ObservedObject var store: AppStore
+    @Environment(\.openWindow) private var openWindow
     @State private var openLogFor: String?
     @State private var searchText = ""
 
@@ -128,6 +134,16 @@ struct MenuContent: View {
             .buttonStyle(.plain)
             .disabled(store.isScanning)
             .help("Atualizar")
+
+            Button {
+                openWindow(id: "config")
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .help("Configurações")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

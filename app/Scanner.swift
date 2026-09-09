@@ -44,6 +44,7 @@ enum Scanner {
         func walk(_ dir: URL, depth: Int) {
             let markers = detect(dir)
             if !markers.isEmpty {
+                let modified = (try? dir.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
                 projects.append(Project(
                     id: dir.path,
                     name: dir.lastPathComponent,
@@ -51,7 +52,8 @@ enum Scanner {
                     group: groupLabel(for: dir, root: rootStd),
                     hasCompose: markers.contains("docker-compose.yml") || markers.contains("docker-compose.yaml"),
                     hasGit: markers.contains(".git"),
-                    markers: markers))
+                    markers: markers,
+                    modified: modified))
                 return  // não desce dentro de um projeto
             }
             guard depth < maxDepth,

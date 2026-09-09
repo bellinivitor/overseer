@@ -11,6 +11,7 @@ struct Project: Identifiable, Hashable {
     let hasCompose: Bool     // tem docker-compose.yml/.yaml
     let hasGit: Bool         // tem .git
     let markers: Set<String> // arquivos que marcaram como projeto
+    let modified: Date?      // data de modificação da pasta do projeto
 
     /// Caminho amigável (~ no lugar do home) para exibição.
     var displayPath: String {
@@ -31,4 +32,18 @@ struct ProjectGroup: Identifiable {
     let id: String      // = label
     let label: String   // ex.: "urbs/sci"
     var projects: [Project]
+}
+
+/// Critério de ordenação dos projetos dentro de cada grupo.
+enum SortOrder: String, CaseIterable, Identifiable {
+    case alphabetical
+    case modified
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .alphabetical: return "Ordem alfabética"
+        case .modified:     return "Última modificação"
+        }
+    }
 }
