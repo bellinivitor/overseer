@@ -15,6 +15,7 @@ final class AppStore: ObservableObject {
     @Published var meta: [String: ProjectMeta] = [:]        // tamanho + linguagens
     @Published var logs: [String: LogSession] = [:]         // sessão de logs por projeto
     @Published var remotes: [String: String] = [:]          // URL do repositório git
+    @Published var updateTag: String?                        // tag mais recente no GitHub, se != atual
 
     private let rootKey = "rootPath"        // legado (diretório único)
     private let rootsKey = "rootPaths"      // atual (lista de diretórios)
@@ -175,6 +176,30 @@ final class AppStore: ObservableObject {
     /// Projetos favoritados (achatados de todos os grupos), já ordenados.
     var favoriteProjects: [Project] {
         sorted(groups.flatMap { $0.projects }.filter { favorites.contains($0.id) })
+    }
+
+    // MARK: Atualização (GitHub)
+
+    /// Consulta as tags do repositório e sinaliza se a mais recente for mais
+    /// nova que a versão instalada.
+    func checkForUpdate() {
+        guard let url = URL(string: AppInfo.tagsAPI) else { return }
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.setValue("Overseer-app", forHTTPHeaderField: "User-Agent")
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
+            guard let data,
+                  let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+            let names = arr.compactMap { $0["name"] as? String }.filter { !$0.isEmpty }
+            let newest = names.max { isNewerVersion($1, than: $0) }
+            Task { @MainActor in
+                if let newest, isNewerVersion(newest, than: AppInfo.currentTag) {
+                    self?.updateTag = newest
+                } else {
+                    self?.updateTag = nil
+                }
+            }
+        }.resume()
     }
 
     // MARK: Contagens

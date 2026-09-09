@@ -14,8 +14,10 @@ struct ConfigWindow: View {
                 .tabItem { Label("Geral", systemImage: "gearshape") }
             AplicativosTab(store: store)
                 .tabItem { Label("Aplicativos", systemImage: "app.badge") }
+            SobreTab(store: store)
+                .tabItem { Label("Sobre", systemImage: "info.circle") }
         }
-        .frame(width: 440, height: 280)
+        .frame(width: 440, height: 300)
         .padding(20)
     }
 }
@@ -122,5 +124,64 @@ struct AplicativosTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+// MARK: - Aba Sobre
+
+struct SobreTab: View {
+    @ObservedObject var store: AppStore
+    private let repoURL = URL(string: AppInfo.repoURL)!
+    private let releasesURL = URL(string: AppInfo.releasesURL)!
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "square.stack.3d.up.fill").font(.system(size: 34))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(AppInfo.name).font(.title).bold()
+                    Text("versão \(AppInfo.version)").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
+            Text("Seus projetos de dev na barra de menu: status Docker, branch git, tamanho, linguagens e start/stop com log — sem abrir o Docker Desktop.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            // Status de atualização (checado no GitHub).
+            if let t = store.updateTag {
+                Link(destination: releasesURL) {
+                    Label("Nova versão disponível: \(t)", systemImage: "arrow.down.circle.fill")
+                }
+                .foregroundStyle(.orange).bold()
+            } else {
+                Label("Você está na versão mais recente", systemImage: "checkmark.circle")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "link").foregroundStyle(.secondary)
+                Link("github.com/bellinivitor/overseer", destination: repoURL)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Atualizações saem no GitHub. Acompanhe o repositório e, para atualizar, rode:")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("git pull && ./build.sh")
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(6)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
+            }
+
+            Spacer()
+            Text("Feito por Vitor Bellini · Licença MIT")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

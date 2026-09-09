@@ -67,7 +67,10 @@ struct MenuContent: View {
         }
         .frame(width: 380)
         .liquidGlass()
-        .onAppear { if store.groups.isEmpty { store.rescan() } }
+        .onAppear {
+            if store.groups.isEmpty { store.rescan() }
+            store.checkForUpdate()
+        }
     }
 
     private var list: some View {
@@ -190,6 +193,14 @@ struct MenuContent: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
             Spacer()
+            if let t = store.updateTag {
+                Link(destination: URL(string: AppInfo.releasesURL)!) {
+                    Label("Atualizar (\(t))", systemImage: "arrow.down.circle.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(.orange)
+                .help("Nova versão disponível no GitHub")
+            }
             Button { NSApplication.shared.terminate(nil) } label: {
                 Text("Sair").font(.system(size: 11.5))
             }
