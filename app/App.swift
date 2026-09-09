@@ -48,7 +48,7 @@ struct MenuContent: View {
                 list
             }
         }
-        .frame(width: 360)
+        .frame(width: 380)
         .liquidGlass()
         .onAppear { if store.groups.isEmpty { store.rescan() } }
     }
@@ -77,7 +77,7 @@ struct MenuContent: View {
                     }
                     .padding(.vertical, 8)
                 }
-                .frame(maxHeight: 460)
+                .frame(minHeight: 360, maxHeight: 480)
             }
             Divider()
             footer
