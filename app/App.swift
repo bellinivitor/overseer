@@ -249,10 +249,16 @@ struct GroupSection: View {
     @ObservedObject var store: AppStore
     let onOpenLog: (LogTarget) -> Void
 
+    private var collapsed: Bool { store.isCollapsed(group.label) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if !group.label.isEmpty {
                 HStack(spacing: 6) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(collapsed ? 0 : 90))
                     Text(group.label)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
@@ -267,10 +273,16 @@ struct GroupSection: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 6)
                 .padding(.bottom, 2)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) { store.toggleCollapsed(group.label) }
+                }
             }
 
-            ForEach(group.projects) { project in
-                ProjectRow(project: project, store: store, onOpenLog: onOpenLog)
+            if !collapsed {
+                ForEach(group.projects) { project in
+                    ProjectRow(project: project, store: store, onOpenLog: onOpenLog)
+                }
             }
         }
     }

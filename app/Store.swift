@@ -164,6 +164,23 @@ final class AppStore: ObservableObject {
         rescan()
     }
 
+    // MARK: Grupos minimizados (persistido)
+
+    private let collapsedKey = "collapsedGroups"
+
+    var collapsedGroups: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: collapsedKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: collapsedKey); objectWillChange.send() }
+    }
+
+    func isCollapsed(_ label: String) -> Bool { collapsedGroups.contains(label) }
+
+    func toggleCollapsed(_ label: String) {
+        var c = collapsedGroups
+        if c.contains(label) { c.remove(label) } else { c.insert(label) }
+        collapsedGroups = c
+    }
+
     // MARK: Favoritos
 
     /// IDs (caminhos) dos projetos favoritados.
