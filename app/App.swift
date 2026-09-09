@@ -15,8 +15,8 @@ struct OverseerApp: App {
             MenuContent(store: store)
         } label: {
             Image(systemName: "square.stack.3d.up")
-            if store.runningCount > 0 {
-                Text("\(store.runningCount)")
+            if store.devRunningCount > 0 {
+                Text("\(store.devRunningCount)")
             }
         }
         .menuBarExtraStyle(.window)
@@ -577,13 +577,28 @@ struct LogView: View {
                         .font(.system(size: 12.5, weight: .semibold))
                         .lineLimit(1)
                     if let s = session {
-                        Text(s.running ? "rodando…" : exitLabel(s.exitCode))
+                        Text(statusText(s))
                             .font(.system(size: 10.5))
-                            .foregroundStyle(s.running ? Color.secondary : (s.exitCode == 0 ? Color.green : Color.red))
+                            .foregroundStyle(statusColor(s))
                     }
                 }
                 Spacer()
-                if session?.running == true { ProgressView().controlSize(.small) }
+                if session?.running == true {
+                    ProgressView().controlSize(.small)
+                    // Stop só faz sentido para o dev (o docker up/down é pontual).
+                    if target.dev {
+                        Button {
+                            store.stopDev(id: target.id)
+                        } label: {
+                            Label("Parar", systemImage: "stop.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .background(RoundedRectangle(cornerRadius: 7).fill(Color.red.opacity(0.15)))
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -613,9 +628,17 @@ struct LogView: View {
         }
     }
 
-    private func exitLabel(_ code: Int32?) -> String {
-        guard let code else { return "concluído" }
+    private func statusText(_ s: LogSession) -> String {
+        if s.running { return "rodando…" }
+        if s.stoppedByUser { return "parado" }
+        guard let code = s.exitCode else { return "concluído" }
         return code == 0 ? "concluído com sucesso" : "terminou com erro (código \(code))"
+    }
+
+    private func statusColor(_ s: LogSession) -> Color {
+        if s.running { return .secondary }
+        if s.stoppedByUser { return .secondary }
+        return s.exitCode == 0 ? .green : .red
     }
 }
 

@@ -128,6 +128,29 @@ struct LogSession: Equatable {
     var lines: [String]
     var running: Bool
     var exitCode: Int32?
+    var stoppedByUser: Bool = false
 
     static let maxLines = 500
+}
+
+// MARK: - Sanitização de logs (remove códigos ANSI/escape)
+
+enum LogSanitizer {
+    /// Limpa uma linha de saída de terminal: remove sequências ANSI (cores,
+    /// mover cursor, limpar linha), resolve carriage-returns (fica com o último
+    /// segmento) e tira caracteres de controle restantes.
+    static func clean(_ raw: String) -> String {
+        var s = raw
+        // CSI: ESC [ ... letra  (cores, [2K, [1A, [G, etc.)
+        s = s.replacingOccurrences(of: "\u{1B}\\[[0-9;?]*[ -/]*[@-~]", with: "", options: .regularExpression)
+        // OSC: ESC ] ... BEL
+        s = s.replacingOccurrences(of: "\u{1B}\\][^\u{07}]*\u{07}", with: "", options: .regularExpression)
+        // outras sequências ESC soltas
+        s = s.replacingOccurrences(of: "\u{1B}[@-Z\\\\-_]", with: "", options: .regularExpression)
+        // carriage return: mantém só o que ficou depois do último \r
+        if s.contains("\r") { s = s.components(separatedBy: "\r").last ?? s }
+        // caracteres de controle remanescentes (menos tab)
+        s = s.replacingOccurrences(of: "[\u{00}-\u{08}\u{0B}\u{0C}\u{0E}-\u{1F}]", with: "", options: .regularExpression)
+        return s
+    }
 }

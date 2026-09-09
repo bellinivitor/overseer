@@ -400,22 +400,33 @@ final class AppStore: ObservableObject {
         }
     }
 
-    func stopDev(_ project: Project) {
-        let id = project.id
+    func stopDev(_ project: Project) { stopDev(id: project.id) }
+
+    /// Para o comando de dev pelo id, marcando que foi o usuário (para o status
+    /// mostrar "parado" em vez de "erro").
+    func stopDev(id: String) {
+        devRuns[id]?.stoppedByUser = true
         if let p = devProcesses[id], p.isRunning {
             p.terminate()   // SIGTERM; o exec faz o Process ser o próprio servidor
         }
     }
 
+    /// Nº de comandos de dev rodando (para o badge da barra de menu).
+    var devRunningCount: Int { devRuns.values.filter { $0.running }.count }
+
     private func appendDevLog(_ id: String, _ line: String) {
-        devRuns[id]?.lines.append(line)
+        let clean = LogSanitizer.clean(line)
+        if clean.isEmpty { return }   // descarta linhas só de controle
+        devRuns[id]?.lines.append(clean)
         if let n = devRuns[id]?.lines.count, n > LogSession.maxLines {
             devRuns[id]?.lines.removeFirst(n - LogSession.maxLines)
         }
     }
 
     private func appendLog(_ id: String, _ line: String) {
-        logs[id]?.lines.append(line)
+        let clean = LogSanitizer.clean(line)
+        if clean.isEmpty { return }
+        logs[id]?.lines.append(clean)
         if let n = logs[id]?.lines.count, n > LogSession.maxLines {
             logs[id]?.lines.removeFirst(n - LogSession.maxLines)
         }
