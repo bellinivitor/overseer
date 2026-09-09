@@ -414,6 +414,18 @@ final class AppStore: ObservableObject {
     /// Nº de comandos de dev rodando (para o badge da barra de menu).
     var devRunningCount: Int { devRuns.values.filter { $0.running }.count }
 
+    /// Acha um projeto pelo id (caminho) em qualquer grupo.
+    func project(byId id: String) -> Project? {
+        for g in groups { if let p = g.projects.first(where: { $0.id == id }) { return p } }
+        return nil
+    }
+
+    /// Roda de novo o comando de dev de um projeto pelo id.
+    func rerunDev(id: String) {
+        guard let p = project(byId: id) else { return }
+        runDev(p)
+    }
+
     private func appendDevLog(_ id: String, _ line: String) {
         let clean = LogSanitizer.clean(line)
         if clean.isEmpty { return }   // descarta linhas só de controle

@@ -585,18 +585,17 @@ struct LogView: View {
                 Spacer()
                 if session?.running == true {
                     ProgressView().controlSize(.small)
-                    // Stop só faz sentido para o dev (o docker up/down é pontual).
-                    if target.dev {
-                        Button {
+                }
+                // Controles do dev: Parar (rodando) / Rodar de novo (parado).
+                if target.dev, let s = session {
+                    if s.running {
+                        headerButton("Parar", icon: "stop.fill", tint: .red) {
                             store.stopDev(id: target.id)
-                        } label: {
-                            Label("Parar", systemImage: "stop.fill")
-                                .font(.system(size: 11, weight: .semibold))
-                                .padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: 7).fill(Color.red.opacity(0.15)))
-                                .foregroundStyle(.red)
                         }
-                        .buttonStyle(.plain)
+                    } else {
+                        headerButton("Rodar de novo", icon: "play.fill", tint: .accentColor) {
+                            store.rerunDev(id: target.id)
+                        }
                     }
                 }
             }
@@ -626,6 +625,17 @@ struct LogView: View {
                 }
             }
         }
+    }
+
+    private func headerButton(_ title: String, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 7).fill(tint.opacity(0.15)))
+                .foregroundStyle(tint)
+        }
+        .buttonStyle(.plain)
     }
 
     private func statusText(_ s: LogSession) -> String {
