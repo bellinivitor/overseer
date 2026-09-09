@@ -1,6 +1,6 @@
 # Scanner de projetos
 
-> Status: todo · Ordem: 02 · Depende de: 01
+> Status: done · Ordem: 02 · Depende de: 01
 
 ## Objetivo
 Varrer o diretório raiz (default `~/www`) e produzir a lista de projetos
