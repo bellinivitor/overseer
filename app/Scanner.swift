@@ -102,14 +102,13 @@ enum Scanner {
     }
 
     /// Label do grupo: caminho da pasta pai relativo ao root (ex.: "urbs/sci").
-    /// Projeto direto na raiz usa o nome da própria raiz.
+    /// Projeto direto na raiz do scan fica sem grupo (label vazia) — não faz
+    /// sentido agrupar sob o nome do próprio diretório varrido.
     static func groupLabel(for projectDir: URL, root: URL) -> String {
         let parent = projectDir.deletingLastPathComponent().standardizedFileURL
         let rootComps = root.pathComponents
         let parentComps = parent.pathComponents
-        guard parentComps.count > rootComps.count else {
-            return root.lastPathComponent
-        }
+        guard parentComps.count > rootComps.count else { return "" }
         return parentComps.suffix(from: rootComps.count).joined(separator: "/")
     }
 }
