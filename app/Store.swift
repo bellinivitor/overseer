@@ -10,6 +10,7 @@ final class AppStore: ObservableObject {
     @Published var groups: [ProjectGroup] = []
     @Published var isScanning = false
     @Published var status: [String: ProjectStatus] = [:]   // por project.id
+    @Published var meta: [String: ProjectMeta] = [:]        // tamanho + linguagens
 
     private let rootKey = "rootPath"
     private let maxConcurrentProbes = 6
@@ -43,6 +44,7 @@ final class AppStore: ObservableObject {
                 self.groups = result
                 self.isScanning = false
                 self.refreshAllStatus()
+                self.refreshAllMeta(force: true)
             }
         }
     }
@@ -68,6 +70,35 @@ final class AppStore: ObservableObject {
                         let up = p.hasCompose ? StatusProbe.dockerUp(at: p.path) : nil
                         await MainActor.run {
                             self.status[p.id] = ProjectStatus(branch: branch, dockerUp: up, loading: false)
+                        }
+                    }
+                }
+                for _ in 0..<limit { addNext() }
+                for await _ in group { addNext() }
+            }
+        }
+    }
+
+    /// Calcula tamanho em disco + linguagens de todos os projetos, com cache
+    /// (só recalcula o que falta, a menos que `force`). Concorrência limitada.
+    func refreshAllMeta(force: Bool = false) {
+        let all = groups.flatMap { $0.projects }
+        let targets = force ? all : all.filter { meta[$0.id]?.size == nil }
+        guard !targets.isEmpty else { return }
+        for p in targets {
+            meta[p.id] = ProjectMeta(size: meta[p.id]?.size, languages: meta[p.id]?.languages ?? [], loading: true)
+        }
+        let limit = maxConcurrentProbes
+        Task.detached(priority: .utility) {
+            await withTaskGroup(of: Void.self) { group in
+                var it = targets.makeIterator()
+                func addNext() {
+                    guard let p = it.next() else { return }
+                    group.addTask {
+                        let langs = LanguageDetector.detect(at: p.path)
+                        let size = DiskSizer.size(at: p.path)
+                        await MainActor.run {
+                            self.meta[p.id] = ProjectMeta(size: size, languages: langs, loading: false)
                         }
                     }
                 }

@@ -139,7 +139,9 @@ struct GroupSection: View {
             .padding(.bottom, 2)
 
             ForEach(group.projects) { project in
-                ProjectRow(project: project, status: store.status[project.id])
+                ProjectRow(project: project,
+                           status: store.status[project.id],
+                           meta: store.meta[project.id])
             }
         }
     }
@@ -150,6 +152,7 @@ struct GroupSection: View {
 struct ProjectRow: View {
     let project: Project
     let status: ProjectStatus?
+    let meta: ProjectMeta?
 
     var body: some View {
         HStack(spacing: 11) {
@@ -182,6 +185,8 @@ struct ProjectRow: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                metaLine
             }
             Spacer(minLength: 0)
 
@@ -189,6 +194,28 @@ struct ProjectRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    /// Linha de metadados: tamanho em disco + chips de linguagem.
+    @ViewBuilder private var metaLine: some View {
+        HStack(spacing: 5) {
+            if let size = meta?.size {
+                Text(size)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            } else if meta?.loading == true {
+                Text("…").font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+            ForEach(meta?.languages ?? [], id: \.self) { lang in
+                Text(lang)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(Color.primary.opacity(0.06)))
+            }
+        }
+        .padding(.top, 1)
     }
 
     /// Bolinha de status docker: verde (up), cinza (down), oculta se sem compose.

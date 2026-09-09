@@ -1,6 +1,6 @@
 # Tamanho em disco + linguagens
 
-> Status: todo · Ordem: 04 · Depende de: 02
+> Status: done · Ordem: 04 · Depende de: 02
 
 ## Objetivo
 Mostrar, por projeto, o tamanho ocupado em disco e as principais linguagens usadas.
