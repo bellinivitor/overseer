@@ -30,10 +30,16 @@ struct OverseerApp: App {
 
 // MARK: - Conteúdo do menu
 
+/// Qual painel de logs abrir: docker (compose) ou dev (task runner).
+struct LogTarget: Equatable {
+    let id: String
+    let dev: Bool
+}
+
 struct MenuContent: View {
     @ObservedObject var store: AppStore
     @Environment(\.openWindow) private var openWindow
-    @State private var openLogFor: String?
+    @State private var openLog: LogTarget?
     @State private var searchText = ""
     @State private var autoRefresh: Timer?
 
@@ -63,8 +69,8 @@ struct MenuContent: View {
 
     var body: some View {
         Group {
-            if let id = openLogFor {
-                LogView(store: store, projectId: id, onBack: { openLogFor = nil })
+            if let target = openLog {
+                LogView(store: store, target: target, onBack: { openLog = nil })
             } else {
                 list
             }
@@ -103,11 +109,11 @@ struct MenuContent: View {
                     VStack(alignment: .leading, spacing: 4) {
                         if !filteredFavorites.isEmpty {
                             FavoritesCard(store: store, projects: filteredFavorites,
-                                          onOpenLog: { openLogFor = $0 })
+                                          onOpenLog: { openLog = $0 })
                         }
                         ForEach(filteredGroups) { group in
                             GroupSection(group: group, store: store,
-                                         onOpenLog: { openLogFor = $0 })
+                                         onOpenLog: { openLog = $0 })
                         }
                         if filteredGroups.isEmpty && filteredFavorites.isEmpty {
                             Text("Nenhum projeto para “\(searchText)”.")
@@ -241,7 +247,7 @@ struct MenuContent: View {
 struct GroupSection: View {
     let group: ProjectGroup
     @ObservedObject var store: AppStore
-    let onOpenLog: (String) -> Void
+    let onOpenLog: (LogTarget) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -275,7 +281,7 @@ struct GroupSection: View {
 struct FavoritesCard: View {
     @ObservedObject var store: AppStore
     let projects: [Project]
-    let onOpenLog: (String) -> Void
+    let onOpenLog: (LogTarget) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -314,7 +320,7 @@ struct FavoritesCard: View {
 struct ProjectRow: View {
     let project: Project
     @ObservedObject var store: AppStore
-    let onOpenLog: (String) -> Void
+    let onOpenLog: (LogTarget) -> Void
 
     @State private var hovering = false
 
@@ -371,6 +377,7 @@ struct ProjectRow: View {
             HStack(spacing: 8) {
                 favoriteButton
                 statusDot
+                if store.hasDevCommand(project) { devButton }
                 if project.hasCompose { composeButton }
                 openMenu
             }
@@ -426,7 +433,7 @@ struct ProjectRow: View {
         Button {
             let goUp = !(status?.dockerUp == true)
             store.runCompose(project, up: goUp)
-            onOpenLog(project.id)
+            onOpenLog(LogTarget(id: project.id, dev: false))
         } label: {
             if isRunning {
                 ProgressView().controlSize(.mini)
@@ -440,6 +447,23 @@ struct ProjectRow: View {
         .buttonStyle(.plain)
         .disabled(isRunning)
         .help(status?.dockerUp == true ? "Derrubar containers" : "Subir containers")
+    }
+
+    /// Botão do task runner (comando de dev): inicia/para e abre o log.
+    @ViewBuilder private var devButton: some View {
+        let running = store.isDevRunning(project)
+        Button {
+            store.toggleDev(project)
+            onOpenLog(LogTarget(id: project.id, dev: true))
+        } label: {
+            Image(systemName: running ? "stop.circle.fill" : "bolt.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(running ? Color.orange : Color.secondary)
+                .frame(width: 22, height: 22)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.07)))
+        }
+        .buttonStyle(.plain)
+        .help(running ? "Parar dev" : "Rodar dev (\(store.devCommand(for: project)))")
     }
 
     /// Menu de abrir o projeto.
@@ -463,9 +487,19 @@ struct ProjectRow: View {
                 Divider()
                 Button("Abrir repositório") { Actions.openURL(remote) }
             }
+            Divider()
+            if store.hasDevCommand(project) {
+                Button(store.isDevRunning(project) ? "Parar dev" : "Rodar dev") {
+                    store.toggleDev(project)
+                    onOpenLog(LogTarget(id: project.id, dev: true))
+                }
+            }
+            Button("Definir comando de dev…") { store.promptDevCommand(for: project) }
             if store.logs[project.id] != nil {
-                Divider()
-                Button("Ver logs") { onOpenLog(project.id) }
+                Button("Ver logs do Docker") { onOpenLog(LogTarget(id: project.id, dev: false)) }
+            }
+            if store.devRuns[project.id] != nil {
+                Button("Ver logs do dev") { onOpenLog(LogTarget(id: project.id, dev: true)) }
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -521,10 +555,12 @@ struct ProjectRow: View {
 
 struct LogView: View {
     @ObservedObject var store: AppStore
-    let projectId: String
+    let target: LogTarget
     let onBack: () -> Void
 
-    private var session: LogSession? { store.logs[projectId] }
+    private var session: LogSession? {
+        target.dev ? store.devRuns[target.id] : store.logs[target.id]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

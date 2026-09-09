@@ -16,6 +16,8 @@ final class AppStore: ObservableObject {
     @Published var logs: [String: LogSession] = [:]         // sessão de logs por projeto
     @Published var remotes: [String: String] = [:]          // URL do repositório git
     @Published var updateTag: String?                        // tag mais recente no GitHub, se != atual
+    @Published var devRuns: [String: LogSession] = [:]       // execução do comando de dev
+    private var devProcesses: [String: Process] = [:]        // handles para parar
 
     private let rootKey = "rootPath"        // legado (diretório único)
     private let rootsKey = "rootPaths"      // atual (lista de diretórios)
@@ -328,6 +330,87 @@ final class AppStore: ObservableObject {
                     status[id]?.loading = false
                 }
             }
+        }
+    }
+
+    // MARK: Task runner (comando de dev por projeto)
+
+    /// Comando de dev do projeto: override salvo ou auto-detecção.
+    func devCommand(for project: Project) -> String {
+        if let saved = UserDefaults.standard.string(forKey: "dev:\(project.id)"), !saved.isEmpty {
+            return saved
+        }
+        return DevCommand.autodetect(at: project.path)
+    }
+
+    func setDevCommand(_ cmd: String, for project: Project) {
+        let trimmed = cmd.trimmingCharacters(in: .whitespacesAndNewlines)
+        UserDefaults.standard.set(trimmed, forKey: "dev:\(project.id)")
+        objectWillChange.send()
+    }
+
+    func hasDevCommand(_ project: Project) -> Bool { !devCommand(for: project).isEmpty }
+
+    /// Abre um prompt para editar o comando de dev do projeto.
+    func promptDevCommand(for project: Project) {
+        let alert = NSAlert()
+        alert.messageText = "Comando de dev — \(project.name)"
+        alert.informativeText = "Roda no diretório do projeto (via zsh -lc)."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        field.stringValue = devCommand(for: project)
+        field.placeholderString = "ex.: npm run dev"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Salvar")
+        alert.addButton(withTitle: "Cancelar")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            setDevCommand(field.stringValue, for: project)
+        }
+    }
+    func isDevRunning(_ project: Project) -> Bool { devRuns[project.id]?.running == true }
+
+    func toggleDev(_ project: Project) {
+        if isDevRunning(project) { stopDev(project) } else { runDev(project) }
+    }
+
+    func runDev(_ project: Project) {
+        let id = project.id
+        guard devRuns[id]?.running != true else { return }
+        let cmd = devCommand(for: project)
+        guard !cmd.isEmpty else { return }
+        devRuns[id] = LogSession(title: "\(project.name) — \(cmd)", lines: [], running: true, exitCode: nil)
+
+        let proc = Shell.launch(cmd, cwd: project.path,
+            onLine: { line in
+                DispatchQueue.main.async { MainActor.assumeIsolated { self.appendDevLog(id, line) } }
+            },
+            onExit: { code in
+                DispatchQueue.main.async { MainActor.assumeIsolated {
+                    self.devRuns[id]?.running = false
+                    self.devRuns[id]?.exitCode = code
+                    self.devProcesses[id] = nil
+                } }
+            })
+
+        if let proc {
+            devProcesses[id] = proc
+        } else {
+            devRuns[id]?.running = false
+            appendDevLog(id, "erro: não consegui iniciar o comando")
+        }
+    }
+
+    func stopDev(_ project: Project) {
+        let id = project.id
+        if let p = devProcesses[id], p.isRunning {
+            p.terminate()   // SIGTERM; o exec faz o Process ser o próprio servidor
+        }
+    }
+
+    private func appendDevLog(_ id: String, _ line: String) {
+        devRuns[id]?.lines.append(line)
+        if let n = devRuns[id]?.lines.count, n > LogSession.maxLines {
+            devRuns[id]?.lines.removeFirst(n - LogSession.maxLines)
         }
     }
 

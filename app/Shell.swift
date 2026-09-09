@@ -64,6 +64,48 @@ enum Shell {
         }
     }
 
+    /// Lança um comando de shell (via `zsh -lc`, PATH de login) transmitindo
+    /// stdout+stderr linha a linha, e devolve o `Process` para poder pará-lo.
+    /// `onLine`/`onExit` são chamados fora da main thread. Usa `exec` no comando
+    /// para o Process virar o próprio servidor (parar mata o servidor, não só o shell).
+    static func launch(_ command: String, cwd: String,
+                       onLine: @escaping (String) -> Void,
+                       onExit: @escaping (Int32) -> Void) -> Process? {
+        // exec faz o Process virar o próprio servidor (parar mata o servidor),
+        // mas não funciona com comando composto — nesse caso roda sem exec.
+        let isCompound = command.contains { ";&|\n".contains($0) }
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        proc.arguments = ["-lc", isCompound ? command : "exec \(command)"]
+        proc.currentDirectoryURL = URL(fileURLWithPath: cwd)
+        var env = ProcessInfo.processInfo.environment
+        env["PATH"] = environmentPath
+        proc.environment = env
+
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+        let handle = pipe.fileHandleForReading
+        let buffer = LineBuffer()
+
+        handle.readabilityHandler = { h in
+            let chunk = h.availableData
+            if chunk.isEmpty { return }
+            for line in buffer.push(chunk) { onLine(line) }
+        }
+        proc.terminationHandler = { p in
+            handle.readabilityHandler = nil
+            if let rest = try? handle.readToEnd(), !rest.isEmpty {
+                for line in buffer.push(rest) { onLine(line) }
+            }
+            if let tail = buffer.flush() { onLine(tail) }
+            onExit(p.terminationStatus)
+        }
+
+        do { try proc.run() } catch { return nil }
+        return proc
+    }
+
     /// Roda um comando transmitindo stdout+stderr linha a linha via AsyncStream.
     /// Termina com `.finished(status)` ou `.failed`. Consumir num contexto async.
     static func streamLines(_ command: String, _ args: [String], cwd: String) -> AsyncStream<StreamEvent> {

@@ -10,3 +10,4 @@ Lista de features do projeto. Cada feature vive em `tasks/NN-slug/`.
 | 04 | apps-padrao-menu — apps padrão (IDE/terminal) e ações de menu (repositório, Claude Code) | done | [04-apps-padrao-menu](04-apps-padrao-menu/00-index.md) |
 | 05 | sobre-versao — aba Sobre e sistema de versão com checagem de update | done | [05-sobre-versao](05-sobre-versao/00-index.md) |
 | 06 | radar-git-docker — git sujo, auto-refresh docker, badge na barra e abrir localhost:PORT | done | [06-radar-git-docker](06-radar-git-docker/00-index.md) |
+| 07 | task-runner — rodar comando de dev por projeto (auto-detectado e editável) com log e start/stop | done | [07-task-runner](07-task-runner/00-index.md) |
