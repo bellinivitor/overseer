@@ -24,8 +24,21 @@ struct OverseerApp: App {
 
 struct MenuContent: View {
     @ObservedObject var store: AppStore
+    @State private var openLogFor: String?
 
     var body: some View {
+        Group {
+            if let id = openLogFor {
+                LogView(store: store, projectId: id, onBack: { openLogFor = nil })
+            } else {
+                list
+            }
+        }
+        .frame(width: 360)
+        .onAppear { if store.groups.isEmpty { store.rescan() } }
+    }
+
+    private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
@@ -35,7 +48,8 @@ struct MenuContent: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(store.groups) { group in
-                            GroupSection(group: group, store: store)
+                            GroupSection(group: group, store: store,
+                                         onOpenLog: { openLogFor = $0 })
                         }
                     }
                     .padding(.vertical, 8)
@@ -45,8 +59,6 @@ struct MenuContent: View {
             Divider()
             footer
         }
-        .frame(width: 360)
-        .onAppear { if store.groups.isEmpty { store.rescan() } }
     }
 
     private var header: some View {
@@ -119,6 +131,7 @@ struct MenuContent: View {
 struct GroupSection: View {
     let group: ProjectGroup
     @ObservedObject var store: AppStore
+    let onOpenLog: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -139,9 +152,7 @@ struct GroupSection: View {
             .padding(.bottom, 2)
 
             ForEach(group.projects) { project in
-                ProjectRow(project: project,
-                           status: store.status[project.id],
-                           meta: store.meta[project.id])
+                ProjectRow(project: project, store: store, onOpenLog: onOpenLog)
             }
         }
     }
@@ -151,8 +162,12 @@ struct GroupSection: View {
 
 struct ProjectRow: View {
     let project: Project
-    let status: ProjectStatus?
-    let meta: ProjectMeta?
+    @ObservedObject var store: AppStore
+    let onOpenLog: (String) -> Void
+
+    private var status: ProjectStatus? { store.status[project.id] }
+    private var meta: ProjectMeta? { store.meta[project.id] }
+    private var isRunning: Bool { store.logs[project.id]?.running == true }
 
     var body: some View {
         HStack(spacing: 11) {
@@ -190,10 +205,55 @@ struct ProjectRow: View {
             }
             Spacer(minLength: 0)
 
-            statusDot
+            HStack(spacing: 8) {
+                statusDot
+                if project.hasCompose { composeButton }
+                openMenu
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    /// Botão play/stop: sobe se estiver down, derruba se estiver up.
+    @ViewBuilder private var composeButton: some View {
+        Button {
+            let goUp = !(status?.dockerUp == true)
+            store.runCompose(project, up: goUp)
+            onOpenLog(project.id)
+        } label: {
+            if isRunning {
+                ProgressView().controlSize(.mini)
+            } else {
+                Image(systemName: status?.dockerUp == true ? "stop.fill" : "play.fill")
+                    .font(.system(size: 10))
+                    .frame(width: 22, height: 22)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(0.07)))
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isRunning)
+        .help(status?.dockerUp == true ? "Derrubar containers" : "Subir containers")
+    }
+
+    /// Menu de abrir o projeto.
+    private var openMenu: some View {
+        Menu {
+            Button("Abrir no VS Code") { Actions.open(.vscode, path: project.path) }
+            Button("Abrir no Finder") { Actions.open(.finder, path: project.path) }
+            Button("Abrir no Terminal") { Actions.open(.terminal, path: project.path) }
+            if store.logs[project.id] != nil {
+                Divider()
+                Button("Ver logs") { onOpenLog(project.id) }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11))
+                .frame(width: 22, height: 22)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     /// Linha de metadados: tamanho em disco + chips de linguagem.
@@ -233,5 +293,71 @@ struct ProjectRow: View {
                 Circle().fill(Color.secondary.opacity(0.25)).frame(width: 8, height: 8)
             }
         }
+    }
+}
+
+// MARK: - Painel de logs
+
+struct LogView: View {
+    @ObservedObject var store: AppStore
+    let projectId: String
+    let onBack: () -> Void
+
+    private var session: LogSession? { store.logs[projectId] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    onBack()
+                } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(session?.title ?? "Logs")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .lineLimit(1)
+                    if let s = session {
+                        Text(s.running ? "rodando…" : exitLabel(s.exitCode))
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(s.running ? Color.secondary : (s.exitCode == 0 ? Color.green : Color.red))
+                    }
+                }
+                Spacer()
+                if session?.running == true { ProgressView().controlSize(.small) }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 1) {
+                        ForEach(Array((session?.lines ?? []).enumerated()), id: \.offset) { idx, line in
+                            Text(line.isEmpty ? " " : line)
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(idx)
+                        }
+                        Color.clear.frame(height: 1).id("bottom")
+                    }
+                    .padding(10)
+                }
+                .frame(height: 380)
+                .onChange(of: session?.lines.count) { _ in
+                    withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+            }
+        }
+    }
+
+    private func exitLabel(_ code: Int32?) -> String {
+        guard let code else { return "concluído" }
+        return code == 0 ? "concluído com sucesso" : "terminou com erro (código \(code))"
     }
 }

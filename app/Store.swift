@@ -11,6 +11,7 @@ final class AppStore: ObservableObject {
     @Published var isScanning = false
     @Published var status: [String: ProjectStatus] = [:]   // por project.id
     @Published var meta: [String: ProjectMeta] = [:]        // tamanho + linguagens
+    @Published var logs: [String: LogSession] = [:]         // sessão de logs por projeto
 
     private let rootKey = "rootPath"
     private let maxConcurrentProbes = 6
@@ -105,6 +106,44 @@ final class AppStore: ObservableObject {
                 for _ in 0..<limit { addNext() }
                 for await _ in group { addNext() }
             }
+        }
+    }
+
+    /// Sobe (`up -d`) ou derruba (`down`) os containers do projeto, transmitindo
+    /// a saída do compose para uma LogSession e recomputando o status no fim.
+    func runCompose(_ project: Project, up: Bool) {
+        let id = project.id
+        guard logs[id]?.running != true else { return }  // já rodando
+        let cmd = up ? "up -d" : "down"
+        logs[id] = LogSession(title: "\(project.name) — docker compose \(cmd)",
+                              lines: [], running: true, exitCode: nil)
+        status[id] = ProjectStatus(branch: status[id]?.branch, dockerUp: status[id]?.dockerUp, loading: true)
+
+        let args = up ? ["compose", "up", "-d"] : ["compose", "down"]
+        // Task herda o MainActor (AppStore é @MainActor): mutações ordenadas na main.
+        Task {
+            for await ev in Shell.streamLines("docker", args, cwd: project.path) {
+                switch ev {
+                case .line(let l):
+                    appendLog(id, l)
+                case .finished(let code):
+                    logs[id]?.running = false
+                    logs[id]?.exitCode = code
+                    refreshStatus(for: project)
+                case .failed:
+                    appendLog(id, "erro: docker não encontrado no PATH")
+                    logs[id]?.running = false
+                    logs[id]?.exitCode = -1
+                    status[id]?.loading = false
+                }
+            }
+        }
+    }
+
+    private func appendLog(_ id: String, _ line: String) {
+        logs[id]?.lines.append(line)
+        if let n = logs[id]?.lines.count, n > LogSession.maxLines {
+            logs[id]?.lines.removeFirst(n - LogSession.maxLines)
         }
     }
 

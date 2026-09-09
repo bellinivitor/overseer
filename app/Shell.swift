@@ -36,6 +36,78 @@ enum Shell {
         let stderr: String
     }
 
+    /// Eventos do streaming de um comando.
+    enum StreamEvent {
+        case line(String)
+        case finished(Int32)
+        case failed         // binário não encontrado ou falha ao iniciar
+    }
+
+    /// Acumula bytes e emite linhas completas (guarda o resto parcial).
+    private final class LineBuffer {
+        private var data = Data()
+        func push(_ chunk: Data) -> [String] {
+            data.append(chunk)
+            var lines: [String] = []
+            while let nl = data.firstIndex(of: 0x0A) {
+                let lineData = data.subdata(in: data.startIndex..<nl)
+                data.removeSubrange(data.startIndex...nl)
+                lines.append(String(data: lineData, encoding: .utf8) ?? "")
+            }
+            return lines
+        }
+        func flush() -> String? {
+            guard !data.isEmpty else { return nil }
+            let s = String(data: data, encoding: .utf8)
+            data.removeAll()
+            return (s?.isEmpty ?? true) ? nil : s
+        }
+    }
+
+    /// Roda um comando transmitindo stdout+stderr linha a linha via AsyncStream.
+    /// Termina com `.finished(status)` ou `.failed`. Consumir num contexto async.
+    static func streamLines(_ command: String, _ args: [String], cwd: String) -> AsyncStream<StreamEvent> {
+        AsyncStream { continuation in
+            guard let bin = resolve(command) else {
+                continuation.yield(.failed); continuation.finish(); return
+            }
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: bin)
+            proc.arguments = args
+            proc.currentDirectoryURL = URL(fileURLWithPath: cwd)
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = environmentPath
+            proc.environment = env
+
+            let pipe = Pipe()
+            proc.standardOutput = pipe
+            proc.standardError = pipe
+            let handle = pipe.fileHandleForReading
+            let buffer = LineBuffer()
+
+            handle.readabilityHandler = { h in
+                let chunk = h.availableData
+                if chunk.isEmpty { return }
+                for line in buffer.push(chunk) { continuation.yield(.line(line)) }
+            }
+
+            proc.terminationHandler = { p in
+                handle.readabilityHandler = nil
+                let rest = try? handle.readToEnd()
+                if let rest, !rest.isEmpty {
+                    for line in buffer.push(rest) { continuation.yield(.line(line)) }
+                }
+                if let tail = buffer.flush() { continuation.yield(.line(tail)) }
+                continuation.yield(.finished(p.terminationStatus))
+                continuation.finish()
+            }
+
+            do { try proc.run() } catch {
+                continuation.yield(.failed); continuation.finish()
+            }
+        }
+    }
+
     /// Roda `command args…` em `cwd`, com timeout. Retorna nil se o binário não
     /// existe ou estourou o tempo. Chamar sempre fora da main thread.
     @discardableResult

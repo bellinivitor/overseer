@@ -1,6 +1,6 @@
 # Ações + painel de logs
 
-> Status: todo · Ordem: 05 · Depende de: 03
+> Status: done · Ordem: 05 · Depende de: 03
 
 ## Objetivo
 Permitir subir/derrubar os containers de um projeto com um clique, vendo a saída
