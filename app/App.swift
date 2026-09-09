@@ -348,26 +348,19 @@ struct ProjectRow: View {
         .contextMenu { contextMenuItems }
     }
 
-    /// Menu de contexto (botão direito): abrir com uma IDE específica.
+    /// Menu de contexto (botão direito): abre direto a lista de IDEs disponíveis.
     @ViewBuilder private var contextMenuItems: some View {
-        Menu("Abrir com") {
-            ForEach(AppCatalog.installed(AppCatalog.ides), id: \.self) { app in
-                Button(store.appDisplayName(app)) {
-                    Actions.open(inApp: app, path: project.path)
-                }
-            }
-            Divider()
-            Button("Outro app…") {
-                if let app = Actions.chooseAppToOpen() {
-                    Actions.open(inApp: app, path: project.path)
-                }
+        ForEach(AppCatalog.installed(AppCatalog.ides), id: \.self) { app in
+            Button(store.appDisplayName(app)) {
+                Actions.open(inApp: app, path: project.path)
             }
         }
         Divider()
-        Button(store.isFavorite(project) ? "Remover dos favoritos" : "Favoritar") {
-            store.toggleFavorite(project)
+        Button("Outro app…") {
+            if let app = Actions.chooseAppToOpen() {
+                Actions.open(inApp: app, path: project.path)
+            }
         }
-        Button("Abrir no Finder") { Actions.revealInFinder(project.path) }
     }
 
     /// Estrela de favorito: aparece no hover ou quando já é favorito.
