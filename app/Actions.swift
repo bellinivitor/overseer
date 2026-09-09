@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - Ações de abrir o projeto
 
@@ -11,6 +12,20 @@ enum Actions {
     /// Abre o projeto num app específico (nome ou caminho de .app), via `open -a`.
     static func open(inApp app: String, path: String) {
         Shell.run("open", ["-a", app, path], cwd: path, timeout: 5)
+    }
+
+    /// Abre um seletor de .app e devolve o caminho escolhido (não persiste).
+    static func chooseAppToOpen() -> String? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Abrir"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        return url.path
     }
 
     /// Abre uma URL no navegador padrão.
