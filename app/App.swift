@@ -340,6 +340,7 @@ struct ProjectRow: View {
                 .fill(Color.primary.opacity(hovering ? 0.07 : 0))
         )
         .padding(.horizontal, 6)
+        .contentShape(Rectangle())   // torna toda a linha (inclusive vazios) hoverável
         .onHover { hovering = $0 }
     }
 
