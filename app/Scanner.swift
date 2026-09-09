@@ -18,6 +18,7 @@ enum Scanner {
     static let skipDirs: Set<String> = [
         "node_modules", "vendor", ".git", ".build", "build", "dist",
         ".next", "Pods", "DerivedData", "target", ".venv", "venv",
+        "wp-includes", "wp-admin",   // guts do WordPress (libs empacotadas)
     ]
 
     /// Detecta se `url` é um projeto e quais markers encontrou.
@@ -31,6 +32,24 @@ enum Scanner {
             found.insert(".git")
         }
         return found
+    }
+
+    /// Varre vários roots e mescla os grupos (por label, sem projetos duplicados).
+    static func scan(roots: [URL], maxDepth: Int = 3) -> [ProjectGroup] {
+        var byLabel: [String: [Project]] = [:]
+        var seen = Set<String>()
+        for root in roots {
+            for group in scan(root: root, maxDepth: maxDepth) {
+                for p in group.projects where !seen.contains(p.id) {
+                    seen.insert(p.id)
+                    byLabel[group.label, default: []].append(p)
+                }
+            }
+        }
+        return byLabel
+            .map { ProjectGroup(id: $0.key, label: $0.key,
+                                projects: $0.value.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
     }
 
     /// Varre o `root` e devolve os grupos de projetos ordenados.

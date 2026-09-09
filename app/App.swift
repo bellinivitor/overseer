@@ -33,17 +33,27 @@ struct MenuContent: View {
     @State private var openLogFor: String?
     @State private var searchText = ""
 
-    /// Grupos filtrados pela busca (nome, caminho ou grupo). Grupos sem match somem.
+    private var query: String { searchText.trimmingCharacters(in: .whitespaces).lowercased() }
+
+    /// Grupos (sem favoritos) filtrados pela busca. Grupos sem match somem.
     private var filteredGroups: [ProjectGroup] {
-        let q = searchText.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return store.groups }
-        return store.groups.compactMap { g in
+        let q = query
+        guard !q.isEmpty else { return store.groupsWithoutFavorites }
+        return store.groupsWithoutFavorites.compactMap { g in
             if g.label.lowercased().contains(q) { return g }
             let hits = g.projects.filter {
                 $0.name.lowercased().contains(q) || $0.path.lowercased().contains(q)
             }
             return hits.isEmpty ? nil : ProjectGroup(id: g.id, label: g.label, projects: hits)
         }
+    }
+
+    /// Favoritos filtrados pela busca.
+    private var filteredFavorites: [Project] {
+        let q = query
+        let favs = store.favoriteProjects
+        guard !q.isEmpty else { return favs }
+        return favs.filter { $0.name.lowercased().contains(q) || $0.path.lowercased().contains(q) }
     }
 
     var body: some View {
@@ -69,11 +79,15 @@ struct MenuContent: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
+                        if !filteredFavorites.isEmpty {
+                            FavoritesCard(store: store, projects: filteredFavorites,
+                                          onOpenLog: { openLogFor = $0 })
+                        }
                         ForEach(filteredGroups) { group in
                             GroupSection(group: group, store: store,
                                          onOpenLog: { openLogFor = $0 })
                         }
-                        if filteredGroups.isEmpty {
+                        if filteredGroups.isEmpty && filteredFavorites.isEmpty {
                             Text("Nenhum projeto para “\(searchText)”.")
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
@@ -120,7 +134,7 @@ struct MenuContent: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Overseer")
                     .font(.system(size: 14.5, weight: .semibold))
-                Text("\(store.rootDisplay) · \(store.totalProjects) projetos")
+                Text("\(store.rootsSummary) · \(store.totalProjects) projetos")
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
             }
@@ -153,11 +167,11 @@ struct MenuContent: View {
         VStack(spacing: 8) {
             if store.isScanning {
                 ProgressView().controlSize(.small)
-                Text("Varrendo \(store.rootDisplay)…")
+                Text("Varrendo \(store.rootsSummary)…")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             } else {
-                Text("Nenhum projeto encontrado em \(store.rootDisplay).")
+                Text("Nenhum projeto encontrado em \(store.rootsSummary).")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -175,11 +189,6 @@ struct MenuContent: View {
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
             Spacer()
-            Button { store.chooseRoot() } label: {
-                Text("Configurar diretório").font(.system(size: 11.5))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
             Button { NSApplication.shared.terminate(nil) } label: {
                 Text("Sair").font(.system(size: 11.5))
             }
@@ -226,6 +235,45 @@ struct GroupSection: View {
                 ProjectRow(project: project, store: store, onOpenLog: onOpenLog)
             }
         }
+    }
+}
+
+// MARK: - Card de favoritos (topo)
+
+struct FavoritesCard: View {
+    @ObservedObject var store: AppStore
+    let projects: [Project]
+    let onOpenLog: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.yellow)
+                Text("Favoritos")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+
+            ForEach(projects) { project in
+                ProjectRow(project: project, store: store, onOpenLog: onOpenLog)
+            }
+            .padding(.bottom, 4)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 10)
+        .padding(.bottom, 4)
     }
 }
 
@@ -279,6 +327,7 @@ struct ProjectRow: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 8) {
+                favoriteButton
                 statusDot
                 if project.hasCompose { composeButton }
                 openMenu
@@ -292,6 +341,21 @@ struct ProjectRow: View {
         )
         .padding(.horizontal, 6)
         .onHover { hovering = $0 }
+    }
+
+    /// Estrela de favorito: aparece no hover ou quando já é favorito.
+    @ViewBuilder private var favoriteButton: some View {
+        let fav = store.isFavorite(project)
+        Button {
+            store.toggleFavorite(project)
+        } label: {
+            Image(systemName: fav ? "star.fill" : "star")
+                .font(.system(size: 11))
+                .foregroundStyle(fav ? Color.yellow : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .opacity(fav || hovering ? 1 : 0)
+        .help(fav ? "Remover dos favoritos" : "Favoritar")
     }
 
     /// Botão play/stop: sobe se estiver down, derruba se estiver up.
@@ -318,6 +382,10 @@ struct ProjectRow: View {
     /// Menu de abrir o projeto.
     private var openMenu: some View {
         Menu {
+            Button(store.isFavorite(project) ? "Remover dos favoritos" : "Favoritar") {
+                store.toggleFavorite(project)
+            }
+            Divider()
             Button("Abrir no VS Code") { Actions.open(.vscode, path: project.path) }
             Button("Abrir no Finder") { Actions.open(.finder, path: project.path) }
             Button("Abrir no Terminal") { Actions.open(.terminal, path: project.path) }

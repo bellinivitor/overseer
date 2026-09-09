@@ -14,9 +14,13 @@ final class AppStore: ObservableObject {
     @Published var meta: [String: ProjectMeta] = [:]        // tamanho + linguagens
     @Published var logs: [String: LogSession] = [:]         // sessão de logs por projeto
 
-    private let rootKey = "rootPath"
+    private let rootKey = "rootPath"        // legado (diretório único)
+    private let rootsKey = "rootPaths"      // atual (lista de diretórios)
     private let sortKey = "sortOrder"
+    private let favKey = "favorites"
     private let maxConcurrentProbes = 6
+
+    // MARK: Ordenação
 
     /// Critério de ordenação dos projetos (persistido). Muda a ordem na hora.
     var sortOrder: SortOrder {
@@ -28,37 +32,119 @@ final class AppStore: ObservableObject {
         }
     }
 
-    /// Reordena os projetos dentro de cada grupo conforme `sortOrder`.
-    func applySort() {
+    /// Ordena uma lista de projetos conforme `sortOrder`.
+    func sorted(_ list: [Project]) -> [Project] {
         let order = sortOrder
-        groups = groups.map { group in
-            var g = group
-            g.projects.sort { a, b in
-                switch order {
-                case .alphabetical:
-                    return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
-                case .modified:
-                    return (a.modified ?? .distantPast) > (b.modified ?? .distantPast)
-                }
+        return list.sorted { a, b in
+            switch order {
+            case .alphabetical:
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            case .modified:
+                return (a.modified ?? .distantPast) > (b.modified ?? .distantPast)
             }
-            return g
         }
     }
 
-    /// Diretório raiz do scan (persistido em UserDefaults). Default: ~/www.
-    var rootPath: String {
-        get { UserDefaults.standard.string(forKey: rootKey) ?? "\(NSHomeDirectory())/www" }
+    /// Reordena os projetos dentro de cada grupo conforme `sortOrder`.
+    func applySort() {
+        groups = groups.map { var g = $0; g.projects = sorted(g.projects); return g }
+    }
+
+    // MARK: Diretórios de scan (múltiplos)
+
+    /// Diretórios raiz do scan (persistidos). Default: ~/www. Migra o valor
+    /// antigo de diretório único, se existir.
+    var roots: [String] {
+        get {
+            if let arr = UserDefaults.standard.stringArray(forKey: rootsKey), !arr.isEmpty { return arr }
+            if let legacy = UserDefaults.standard.string(forKey: rootKey) { return [legacy] }
+            return ["\(NSHomeDirectory())/www"]
+        }
         set {
-            UserDefaults.standard.set(newValue, forKey: rootKey)
+            UserDefaults.standard.set(newValue, forKey: rootsKey)
             objectWillChange.send()
         }
     }
 
-    /// Caminho amigável do root (~ no lugar do home).
-    var rootDisplay: String {
+    /// Caminho amigável (~ no lugar do home).
+    func display(_ path: String) -> String {
         let home = NSHomeDirectory()
-        return rootPath.hasPrefix(home) ? "~" + rootPath.dropFirst(home.count) : rootPath
+        return path.hasPrefix(home) ? "~" + path.dropFirst(home.count) : path
     }
+
+    /// Subtítulo do header: o único caminho, ou "N diretórios".
+    var rootsSummary: String {
+        let r = roots
+        return r.count == 1 ? display(r[0]) : "\(r.count) diretórios"
+    }
+
+    /// Adiciona um diretório (via NSOpenPanel) e re-varre.
+    func addRoot() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Adicionar"
+        panel.directoryURL = URL(fileURLWithPath: roots.first ?? NSHomeDirectory())
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        var r = roots
+        guard !r.contains(url.path) else { return }
+        r.append(url.path)
+        roots = r
+        resetAndRescan()
+    }
+
+    /// Remove um diretório da lista e re-varre (mantém ao menos um).
+    func removeRoot(_ path: String) {
+        var r = roots
+        r.removeAll { $0 == path }
+        if r.isEmpty { r = ["\(NSHomeDirectory())/www"] }
+        roots = r
+        resetAndRescan()
+    }
+
+    private func resetAndRescan() {
+        groups = []
+        status = [:]
+        meta = [:]
+        logs = [:]
+        rescan()
+    }
+
+    // MARK: Favoritos
+
+    /// IDs (caminhos) dos projetos favoritados.
+    var favorites: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: favKey) ?? []) }
+        set {
+            UserDefaults.standard.set(Array(newValue), forKey: favKey)
+            objectWillChange.send()
+        }
+    }
+
+    func isFavorite(_ project: Project) -> Bool { favorites.contains(project.id) }
+
+    func toggleFavorite(_ project: Project) {
+        var f = favorites
+        if f.contains(project.id) { f.remove(project.id) } else { f.insert(project.id) }
+        favorites = f
+    }
+
+    /// Projetos favoritados (achatados de todos os grupos), já ordenados.
+    var favoriteProjects: [Project] {
+        sorted(groups.flatMap { $0.projects }.filter { favorites.contains($0.id) })
+    }
+
+    /// Grupos sem os projetos favoritados (que sobem para o card do topo).
+    var groupsWithoutFavorites: [ProjectGroup] {
+        groups.compactMap { g in
+            let rest = g.projects.filter { !favorites.contains($0.id) }
+            return rest.isEmpty ? nil : ProjectGroup(id: g.id, label: g.label, projects: rest)
+        }
+    }
+
+    // MARK: Contagens
 
     /// Total de projetos detectados.
     var totalProjects: Int { groups.reduce(0) { $0 + $1.projects.count } }
@@ -68,31 +154,13 @@ final class AppStore: ObservableObject {
         groups.filter { g in g.projects.contains { status[$0.id]?.dockerUp == true } }.count
     }
 
-    /// Abre um NSOpenPanel para escolher o root de scan e re-varre.
-    func chooseRoot() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Escolher"
-        panel.directoryURL = URL(fileURLWithPath: rootPath)
-        NSApp.activate(ignoringOtherApps: true)
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        rootPath = url.path
-        groups = []
-        status = [:]
-        meta = [:]
-        logs = [:]
-        rescan()
-    }
-
-    /// Re-executa o scan de forma assíncrona.
+    /// Re-executa o scan de forma assíncrona (varre todos os diretórios).
     func rescan() {
         guard !isScanning else { return }
         isScanning = true
-        let root = URL(fileURLWithPath: rootPath)
+        let urls = roots.map { URL(fileURLWithPath: $0) }
         Task.detached(priority: .userInitiated) {
-            let result = Scanner.scan(root: root)
+            let result = Scanner.scan(roots: urls)
             await MainActor.run {
                 self.groups = result
                 self.applySort()

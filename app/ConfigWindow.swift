@@ -25,7 +25,7 @@ struct GeralTab: View {
 
     var body: some View {
         Form {
-            Section {
+            Section("Ordenação") {
                 Picker("Ordenar projetos por", selection: Binding(
                     get: { store.sortOrder },
                     set: { store.sortOrder = $0 })) {
@@ -34,18 +34,37 @@ struct GeralTab: View {
                     }
                 }
                 .pickerStyle(.menu)
+            }
 
-                LabeledContent("Diretório de scan") {
+            Section {
+                ForEach(store.roots, id: \.self) { path in
                     HStack(spacing: 8) {
-                        Text(store.rootDisplay)
+                        Image(systemName: "folder")
                             .foregroundStyle(.secondary)
+                        Text(store.display(path))
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Button("Alterar…") { store.chooseRoot() }
+                        Spacer()
+                        Button {
+                            store.removeRoot(path)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .disabled(store.roots.count <= 1)
+                        .help("Remover")
                     }
                 }
+                Button {
+                    store.addRoot()
+                } label: {
+                    Label("Adicionar diretório", systemImage: "plus")
+                }
+            } header: {
+                Text("Diretórios de scan")
             } footer: {
-                Text("A ordenação vale para os projetos dentro de cada grupo. Os grupos seguem em ordem alfabética.")
+                Text("O Overseer varre todos os diretórios listados (profundidade 3) e junta os projetos. A ordenação vale dentro de cada grupo; os grupos seguem alfabéticos.")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
             }
