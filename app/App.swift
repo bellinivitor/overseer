@@ -384,6 +384,10 @@ struct ProjectRow: View {
         .padding(.horizontal, 6)
         .contentShape(Rectangle())   // torna toda a linha (inclusive vazios) hoverável
         .onHover { hovering = $0 }
+        .onTapGesture(count: 2) {
+            Actions.open(inApp: store.ideApp, path: project.path)
+        }
+        .help("Duplo-clique abre no \(store.ideDisplayName)")
         .contextMenu { contextMenuItems }
     }
 
