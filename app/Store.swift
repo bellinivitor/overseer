@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - Store
 //
@@ -13,12 +14,52 @@ final class AppStore: ObservableObject {
     @Published var status: [String: ProjectStatus] = [:]   // por project.id
     @Published var meta: [String: ProjectMeta] = [:]        // tamanho + linguagens
     @Published var logs: [String: LogSession] = [:]         // sessão de logs por projeto
+    @Published var remotes: [String: String] = [:]          // URL do repositório git
 
     private let rootKey = "rootPath"        // legado (diretório único)
     private let rootsKey = "rootPaths"      // atual (lista de diretórios)
     private let sortKey = "sortOrder"
     private let favKey = "favorites"
+    private let ideKey = "ideApp"
+    private let terminalKey = "terminalApp"
     private let maxConcurrentProbes = 6
+
+    // MARK: Aplicativos padrão (IDE / Terminal)
+
+    /// App usado em "Abrir no editor" (nome ou caminho de .app). Default: VS Code.
+    var ideApp: String {
+        get { UserDefaults.standard.string(forKey: ideKey) ?? "Visual Studio Code" }
+        set { UserDefaults.standard.set(newValue, forKey: ideKey); objectWillChange.send() }
+    }
+
+    /// App usado em "Abrir no terminal". Default: Terminal.
+    var terminalApp: String {
+        get { UserDefaults.standard.string(forKey: terminalKey) ?? "Terminal" }
+        set { UserDefaults.standard.set(newValue, forKey: terminalKey); objectWillChange.send() }
+    }
+
+    /// Nome amigável de um app (tira caminho e ".app").
+    func appDisplayName(_ s: String) -> String {
+        let base = (s as NSString).lastPathComponent
+        return base.hasSuffix(".app") ? String(base.dropLast(4)) : base
+    }
+
+    var ideDisplayName: String { appDisplayName(ideApp) }
+    var terminalDisplayName: String { appDisplayName(terminalApp) }
+
+    /// Abre o seletor para escolher um .app (editor ou terminal).
+    func chooseApp(terminal: Bool) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Escolher"
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if terminal { terminalApp = url.path } else { ideApp = url.path }
+    }
 
     // MARK: Ordenação
 
@@ -136,14 +177,6 @@ final class AppStore: ObservableObject {
         sorted(groups.flatMap { $0.projects }.filter { favorites.contains($0.id) })
     }
 
-    /// Grupos sem os projetos favoritados (que sobem para o card do topo).
-    var groupsWithoutFavorites: [ProjectGroup] {
-        groups.compactMap { g in
-            let rest = g.projects.filter { !favorites.contains($0.id) }
-            return rest.isEmpty ? nil : ProjectGroup(id: g.id, label: g.label, projects: rest)
-        }
-    }
-
     // MARK: Contagens
 
     /// Total de projetos detectados.
@@ -190,8 +223,10 @@ final class AppStore: ObservableObject {
                     group.addTask {
                         let branch = p.hasGit ? StatusProbe.gitBranch(at: p.path) : nil
                         let up = p.hasCompose ? StatusProbe.dockerUp(at: p.path) : nil
+                        let remote = p.hasGit ? StatusProbe.gitRemoteURL(at: p.path) : nil
                         await MainActor.run {
                             self.status[p.id] = ProjectStatus(branch: branch, dockerUp: up, loading: false)
+                            self.remotes[p.id] = remote
                         }
                     }
                 }
@@ -276,8 +311,10 @@ final class AppStore: ObservableObject {
         Task.detached(priority: .userInitiated) {
             let branch = project.hasGit ? StatusProbe.gitBranch(at: project.path) : nil
             let up = project.hasCompose ? StatusProbe.dockerUp(at: project.path) : nil
+            let remote = project.hasGit ? StatusProbe.gitRemoteURL(at: project.path) : nil
             await MainActor.run {
                 self.status[project.id] = ProjectStatus(branch: branch, dockerUp: up, loading: false)
+                self.remotes[project.id] = remote
             }
         }
     }

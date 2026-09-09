@@ -35,11 +35,12 @@ struct MenuContent: View {
 
     private var query: String { searchText.trimmingCharacters(in: .whitespaces).lowercased() }
 
-    /// Grupos (sem favoritos) filtrados pela busca. Grupos sem match somem.
+    /// Grupos filtrados pela busca. Favoritos continuam aqui (marcados com a
+    /// estrela) e também aparecem no card do topo. Grupos sem match somem.
     private var filteredGroups: [ProjectGroup] {
         let q = query
-        guard !q.isEmpty else { return store.groupsWithoutFavorites }
-        return store.groupsWithoutFavorites.compactMap { g in
+        guard !q.isEmpty else { return store.groups }
+        return store.groups.compactMap { g in
             if g.label.lowercased().contains(q) { return g }
             let hits = g.projects.filter {
                 $0.name.lowercased().contains(q) || $0.path.lowercased().contains(q)
@@ -387,9 +388,13 @@ struct ProjectRow: View {
                 store.toggleFavorite(project)
             }
             Divider()
-            Button("Abrir no VS Code") { Actions.open(.vscode, path: project.path) }
-            Button("Abrir no Finder") { Actions.open(.finder, path: project.path) }
-            Button("Abrir no Terminal") { Actions.open(.terminal, path: project.path) }
+            Button("Abrir no \(store.ideDisplayName)") { Actions.open(inApp: store.ideApp, path: project.path) }
+            Button("Abrir no Finder") { Actions.revealInFinder(project.path) }
+            Button("Abrir no \(store.terminalDisplayName)") { Actions.open(inApp: store.terminalApp, path: project.path) }
+            Button("Abrir Claude Code") { Actions.openClaudeCode(path: project.path, terminalApp: store.terminalApp) }
+            if let remote = store.remotes[project.id] {
+                Button("Abrir repositório") { Actions.openURL(remote) }
+            }
             if store.logs[project.id] != nil {
                 Divider()
                 Button("Ver logs") { onOpenLog(project.id) }
