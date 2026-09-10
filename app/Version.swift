@@ -4,8 +4,8 @@ import Foundation
 
 enum AppInfo {
     static let name = "Overseer"
-    static let version = "0.1.1 beta"
-    static let currentTag = "v0.1.1-beta"
+    static let version = "0.1.2 beta"
+    static let currentTag = "v0.1.2-beta"
 
     static let repoURL = "https://github.com/bellinivitor/overseer"
     static let releasesURL = "https://github.com/bellinivitor/overseer/releases"
