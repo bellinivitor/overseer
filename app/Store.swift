@@ -27,12 +27,50 @@ final class AppStore: ObservableObject {
     private let terminalKey = "terminalApp"
     private let maxConcurrentProbes = 6
 
+    // MARK: Atalho global
+
+    @Published var hotKeyCode: UInt32 = 0
+    @Published var hotKeyMods: UInt32 = 0
+    private let hotKey = GlobalHotKey()
+
+    private func loadHotKey() {
+        let d = UserDefaults.standard
+        hotKeyCode = UInt32(d.integer(forKey: "hotKeyCode"))   // 0 = nenhum (default)
+        hotKeyMods = UInt32(d.integer(forKey: "hotKeyMods"))
+        hotKey.action = { [weak self] in Task { @MainActor in self?.openPanel() } }
+        hotKey.register(keyCode: hotKeyCode, modifiers: hotKeyMods)
+    }
+
+    /// Redefine e re-registra o atalho global (0/0 = remover).
+    func updateHotKey(keyCode: UInt32, mods: UInt32) {
+        hotKeyCode = keyCode
+        hotKeyMods = mods
+        UserDefaults.standard.set(Int(keyCode), forKey: "hotKeyCode")
+        UserDefaults.standard.set(Int(mods), forKey: "hotKeyMods")
+        hotKey.register(keyCode: keyCode, modifiers: mods)
+    }
+
+    /// Abre o painel da barra de menu clicando no NSStatusItem do MenuBarExtra
+    /// (não há API pública para isso; usamos `perform` com guarda para não crashar).
+    func openPanel() {
+        NSApp.activate(ignoringOtherApps: true)
+        let sel = NSSelectorFromString("statusItem")
+        for window in NSApp.windows where window.responds(to: sel) {
+            if let item = window.perform(sel)?.takeUnretainedValue() as? NSStatusItem,
+               let button = item.button {
+                button.performClick(nil)
+                return
+            }
+        }
+    }
+
     init() {
         // Scan inicial no launch para o badge da barra refletir o estado sem
         // precisar abrir o painel. Depois disso o app fica ocioso (sem timers)
         // até uma interação/refresh.
         rescan()
         checkForUpdate()
+        loadHotKey()
     }
 
     // MARK: Aplicativos padrão (IDE / Terminal)

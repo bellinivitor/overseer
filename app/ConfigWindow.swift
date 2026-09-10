@@ -17,7 +17,7 @@ struct ConfigWindow: View {
             SobreTab(store: store)
                 .tabItem { Label("Sobre", systemImage: "info.circle") }
         }
-        .frame(width: 440, height: 300)
+        .frame(width: 460, height: 360)
         .padding(20)
     }
 }
@@ -38,6 +38,16 @@ struct GeralTab: View {
                     }
                 }
                 .pickerStyle(.menu)
+            }
+
+            Section {
+                LabeledContent("Atalho global") {
+                    HotKeyRecorderView(store: store)
+                }
+            } footer: {
+                Text("Abre o Overseer de qualquer lugar. Sem atalho por padrão.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
             }
 
             Section {
@@ -183,5 +193,48 @@ struct SobreTab: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+// MARK: - Gravador de atalho global
+
+struct HotKeyRecorderView: View {
+    @ObservedObject var store: AppStore
+    @State private var recording = false
+    @State private var monitor: Any?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(hotKeyLabel(keyCode: store.hotKeyCode, carbonMods: store.hotKeyMods))
+                .font(.system(.body, design: .rounded)).bold()
+                .frame(minWidth: 80, alignment: .leading)
+                .padding(.horizontal, 8).padding(.vertical, 3)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
+            Button(recording ? "Pressione as teclas…" : "Definir") { toggle() }
+                .controlSize(.small)
+            if recording {
+                Button("Cancelar") { stop() }.buttonStyle(.borderless).controlSize(.small)
+            } else if store.hotKeyCode != 0 || store.hotKeyMods != 0 {
+                Button("Remover") { store.updateHotKey(keyCode: 0, mods: 0) }
+                    .buttonStyle(.borderless).controlSize(.small)
+            }
+        }
+    }
+
+    private func toggle() {
+        if recording { stop(); return }
+        recording = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            let mods = carbonModifiers(from: event.modifierFlags)
+            guard mods != 0 else { return event }   // exige ao menos um modificador
+            store.updateHotKey(keyCode: UInt32(event.keyCode), mods: mods)
+            stop()
+            return nil
+        }
+    }
+
+    private func stop() {
+        recording = false
+        if let m = monitor { NSEvent.removeMonitor(m); monitor = nil }
     }
 }
