@@ -75,7 +75,7 @@ struct MenuContent: View {
                 list
             }
         }
-        .frame(width: 380)
+        .frame(width: 420)
         .liquidGlass()
         .onAppear {
             if store.groups.isEmpty { store.rescan() }
@@ -545,6 +545,8 @@ struct ProjectRow: View {
                 Text(lang)
                     .font(.system(size: 9.5, weight: .medium))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(Capsule().fill(Color.primary.opacity(0.06)))
