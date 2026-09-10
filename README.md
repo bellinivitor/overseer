@@ -6,7 +6,7 @@
 
 **Pare de caçar terminais e de abrir o Docker Desktop.** O Overseer mora na barra
 de menu do seu Mac e te dá, num único painel, o raio-x de todos os projetos que
-você tem na máquina: o que está no ar, em que branch, quanto ocupa em disco — e
+você tem na máquina: o que está no ar, em que branch, quanto ocupa em disco. E
 sobe, derruba ou roda cada um sem sair do lugar.
 
 ![versão](https://img.shields.io/github/v/release/bellinivitor/overseer?include_prereleases&label=vers%C3%A3o)
@@ -15,14 +15,12 @@ sobe, derruba ou roda cada um sem sair do lugar.
 
 </div>
 
----
-
 ## Por que você vai querer
 
 Quem toca vários projetos ao mesmo tempo vive a mesma dança: abrir o Docker
 Desktop, lembrar em qual pasta estava, achar o terminal certo, subir o compose,
 abrir a IDE, checar a branch… vezes cinco. O Overseer colapsa tudo isso num
-painel só — **troca de contexto em segundos, não em minutos.**
+painel só. **Troca de contexto em segundos, não em minutos.**
 
 ## O que ele faz
 
@@ -32,7 +30,7 @@ painel só — **troca de contexto em segundos, não em minutos.**
 - **🟢 Status ao vivo.** Vê num relance quais containers estão no ar (bolinha
   verde), a branch atual e se tem **alterações não commitadas** (com ahead/behind).
 - **🐳 Docker sem Docker Desktop.** Sobe (`up -d`) e derruba (`down`) os
-  containers de um projeto com um clique — e acompanha a saída num **painel de
+  containers de um projeto com um clique, acompanhando a saída num **painel de
   log ao vivo**.
 - **⚡ Task runner embutido.** Roda o servidor de dev do projeto (`npm run dev`,
   `php artisan serve`, `cargo run`… **detectado automaticamente**) com log limpo,
@@ -80,7 +78,7 @@ camadas pra abrir o painel.
 ## Como funciona
 
 - **SwiftUI nativo**, `MenuBarExtra` + `LSUIElement` (vive na barra de menu).
-- Compilado direto com `swiftc` via `./build.sh` — **sem projeto Xcode**.
+- Compilado direto com `swiftc` via `./build.sh`, **sem projeto Xcode**.
 - Roda `git`, `docker` e o comando de dev via `Process`, no diretório de cada
   projeto. Nada sai da sua máquina.
 
