@@ -29,6 +29,16 @@ painel só. **Troca de contexto em segundos, não em minutos.**
   `package.json` ou `composer.json`.
 - **🟢 Status ao vivo.** Vê num relance quais containers estão no ar (bolinha
   verde), a branch atual e se tem **alterações não commitadas** (com ahead/behind).
+- **🪟 Painel de detalhe (clique único).** Clique numa linha e abra o raio-x do
+  projeto num painel deslizante e nativo: git, docker e todas as ações num lugar
+  só, deixando a lista enxuta.
+- **🌿 Git sem sair do painel.** **Troque de branch** por um pop-up nativo — com
+  **pré-check de conflito**: branches que sobrescreveriam suas alterações já vêm
+  desabilitadas, então você não quebra nada. Faça **stash** com um clique, veja a
+  **última atividade** (“commitado há 3 dias”) e a **lista de arquivos não
+  commitados** (modificado / novo / removido / renomeado).
+- **📈 Uso de recursos.** Veja **CPU e memória por container** (`docker stats`)
+  dentro do painel, sob demanda — sem abrir o Docker Desktop.
 - **🐳 Docker sem Docker Desktop.** Sobe (`up -d`) e derruba (`down`) os
   containers de um projeto com um clique, acompanhando a saída num **painel de
   log ao vivo**.
@@ -37,9 +47,10 @@ painel só. **Troca de contexto em segundos, não em minutos.**
   start/stop e o processo continuando vivo enquanto você trabalha.
 - **📊 Contexto de cada projeto.** Tamanho em disco e principais linguagens,
   calculados em segundo plano.
-- **🚀 Abra do seu jeito.** Duplo-clique abre na sua IDE; pelo menu você abre no
-  Finder, no terminal, no **repositório do GitHub** (no navegador) ou manda um
-  **"Abrir Claude Code"** já na pasta. Botão direito escolhe outra IDE na hora.
+- **🚀 Abra do seu jeito.** Pelo painel (ou pelo menu) você abre na **IDE**, no
+  Finder, no terminal, no **repositório do GitHub** ou manda um **"Abrir Claude
+  Code"** já na pasta. Duplo-clique na linha abre direto na IDE; botão direito
+  escolhe outra IDE na hora.
 - **🌐 Um clique pro navegador.** Detecta as portas publicadas dos containers e
   oferece **"Abrir localhost:PORT"**.
 - **⭐ Favoritos, busca e grupos.** Fixe os projetos do dia no topo, filtre por
@@ -72,8 +83,9 @@ camadas pra abrir o painel.
    onde ficam seus projetos (ex.: `~/www`, `~/code`). Pode adicionar vários.
 2. Em **Aplicativos**, escolha seu **editor/IDE** e **terminal** padrão.
 3. (Opcional) Em **Geral**, defina um **atalho global** pra abrir o Overseer.
-4. Pronto: passe o mouse numa linha e use ▶ pra subir o Docker, ⚡ pra rodar o
-   dev, ⭐ pra favoritar, ou duplo-clique pra abrir na IDE.
+4. Pronto: **clique numa linha** pra abrir o painel de detalhe (git, docker e
+   ações), use ▶ pra subir o Docker, ⚡ pra rodar o dev, ⭐ pra favoritar, ou
+   duplo-clique pra abrir direto na IDE.
 
 ## Como funciona
 
