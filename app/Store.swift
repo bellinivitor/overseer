@@ -517,6 +517,31 @@ final class AppStore: ObservableObject {
         }
     }
 
+    // MARK: Ações de git (detalhe do projeto)
+
+    /// Troca a branch do projeto e, em sucesso, recomputa o status. `completion`
+    /// recebe nil (ok) ou a mensagem de erro do git, na main thread.
+    func switchBranch(_ project: Project, to branch: String, completion: @escaping (String?) -> Void) {
+        Task.detached(priority: .userInitiated) {
+            let err = StatusProbe.checkout(at: project.path, branch: branch)
+            await MainActor.run {
+                completion(err)
+                if err == nil { self.refreshStatus(for: project) }
+            }
+        }
+    }
+
+    /// Guarda as alterações rastreadas (stash) e recomputa o status em sucesso.
+    func stashChanges(_ project: Project, completion: @escaping (String?) -> Void) {
+        Task.detached(priority: .userInitiated) {
+            let err = StatusProbe.stash(at: project.path)
+            await MainActor.run {
+                completion(err)
+                if err == nil { self.refreshStatus(for: project) }
+            }
+        }
+    }
+
     // MARK: Auto-refresh (só docker, para o timer com o painel aberto)
 
     /// Nº de projetos com containers no ar.

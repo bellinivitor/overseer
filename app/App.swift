@@ -40,6 +40,7 @@ struct MenuContent: View {
     @ObservedObject var store: AppStore
     @Environment(\.openWindow) private var openWindow
     @State private var openLog: LogTarget?
+    @State private var detailID: String?
     @State private var searchText = ""
     @State private var autoRefresh: Timer?
 
@@ -70,7 +71,13 @@ struct MenuContent: View {
     var body: some View {
         Group {
             if let target = openLog {
+                // Log fica por cima do detalhe: ao voltar, retorna ao detalhe se
+                // ele ainda estiver aberto; senão, à lista.
                 LogView(store: store, target: target, onBack: { openLog = nil })
+            } else if let id = detailID, let project = store.project(byId: id) {
+                ProjectDetailView(store: store, project: project,
+                                  onBack: { detailID = nil },
+                                  onOpenLog: { openLog = $0 })
             } else {
                 list
             }
@@ -109,11 +116,13 @@ struct MenuContent: View {
                     VStack(alignment: .leading, spacing: 4) {
                         if !filteredFavorites.isEmpty {
                             FavoritesCard(store: store, projects: filteredFavorites,
-                                          onOpenLog: { openLog = $0 })
+                                          onOpenLog: { openLog = $0 },
+                                          onOpenDetail: { detailID = $0 })
                         }
                         ForEach(filteredGroups) { group in
                             GroupSection(group: group, store: store,
-                                         onOpenLog: { openLog = $0 })
+                                         onOpenLog: { openLog = $0 },
+                                         onOpenDetail: { detailID = $0 })
                         }
                         if filteredGroups.isEmpty && filteredFavorites.isEmpty {
                             Text("Nenhum projeto para “\(searchText)”.")
@@ -248,6 +257,7 @@ struct GroupSection: View {
     let group: ProjectGroup
     @ObservedObject var store: AppStore
     let onOpenLog: (LogTarget) -> Void
+    let onOpenDetail: (String) -> Void
 
     private var collapsed: Bool { store.isCollapsed(group.label) }
 
@@ -281,7 +291,8 @@ struct GroupSection: View {
 
             if !collapsed {
                 ForEach(group.projects) { project in
-                    ProjectRow(project: project, store: store, onOpenLog: onOpenLog)
+                    ProjectRow(project: project, store: store, onOpenLog: onOpenLog,
+                               onOpenDetail: onOpenDetail)
                 }
             }
         }
@@ -294,6 +305,7 @@ struct FavoritesCard: View {
     @ObservedObject var store: AppStore
     let projects: [Project]
     let onOpenLog: (LogTarget) -> Void
+    let onOpenDetail: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -310,7 +322,8 @@ struct FavoritesCard: View {
             .padding(.bottom, 2)
 
             ForEach(projects) { project in
-                ProjectRow(project: project, store: store, onOpenLog: onOpenLog)
+                ProjectRow(project: project, store: store, onOpenLog: onOpenLog,
+                           onOpenDetail: onOpenDetail)
             }
             .padding(.bottom, 4)
         }
@@ -333,6 +346,7 @@ struct ProjectRow: View {
     let project: Project
     @ObservedObject var store: AppStore
     let onOpenLog: (LogTarget) -> Void
+    let onOpenDetail: (String) -> Void
 
     @State private var hovering = false
 
@@ -408,10 +422,15 @@ struct ProjectRow: View {
         .padding(.horizontal, 6)
         .contentShape(Rectangle())   // torna toda a linha (inclusive vazios) hoverável
         .onHover { hovering = $0 }
+        // count:2 declarado antes de count:1 para o SwiftUI desambiguar:
+        // duplo-clique abre na IDE; clique único abre o detalhe.
         .onTapGesture(count: 2) {
             Actions.open(inApp: store.ideApp, path: project.path)
         }
-        .help("Duplo-clique abre no \(store.ideDisplayName)")
+        .onTapGesture(count: 1) {
+            onOpenDetail(project.id)
+        }
+        .help("Clique abre o detalhe · duplo-clique abre no \(store.ideDisplayName)")
         .contextMenu { contextMenuItems }
     }
 
